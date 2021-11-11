@@ -177,7 +177,7 @@ func TestPathParams(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	} else if got, want := pps.Get("second"), ""; got != want {
 		t.Errorf("got %q, want %q", got, want)
-	} else if !pps.Has("second") {
+	} else if _, ok := pps["second"]; !ok {
 		t.Error("want true")
 	} else if !reflect.DeepEqual(PathParams(req), pps) {
 		t.Error("want true")
@@ -202,7 +202,7 @@ func TestPathParams(t *testing.T) {
 		t.Errorf("got %d, want %d", got, want)
 	} else if got, want := pps.Get("first"), ""; got != want {
 		t.Errorf("got %q, want %q", got, want)
-	} else if pps.Has("first") {
+	} else if _, ok := pps["first"]; ok {
 		t.Error("want false")
 	} else if !reflect.DeepEqual(PathParams(req), pps) {
 		t.Error("want true")
@@ -227,11 +227,11 @@ func TestPathParams(t *testing.T) {
 		t.Errorf("got %d, want %d", got, want)
 	} else if got, want := pps.Get("first"), ""; got != want {
 		t.Errorf("got %q, want %q", got, want)
-	} else if pps.Has("first") {
+	} else if _, ok := pps["first"]; ok {
 		t.Error("want false")
 	} else if got, want := pps.Get("second"), ""; got != want {
 		t.Errorf("got %q, want %q", got, want)
-	} else if pps.Has("second") {
+	} else if _, ok := pps["second"]; ok {
 		t.Error("want false")
 	} else if !reflect.DeepEqual(PathParams(req), pps) {
 		t.Error("want true")
@@ -349,7 +349,7 @@ func TestPathParams(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	} else if got, want := pps.Get("*"), ""; got != want {
 		t.Errorf("got %q, want %q", got, want)
-	} else if !pps.Has("*") {
+	} else if _, ok := pps["*"]; !ok {
 		t.Error("want true")
 	} else if !reflect.DeepEqual(PathParams(req), pps) {
 		t.Error("want true")
