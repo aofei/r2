@@ -61,7 +61,7 @@ func (r *Router) Sub(pathPrefix string, ms ...Middleware) *Router {
 // the matching `h` and optional `ms`.
 //
 // Note that a ':' followed by a name in the `path` declares a path parameter
-// that matches all characters except '/'. And a '*' in the `path` declares a
+// that matches all characters except '/'. And an '*' in the `path` declares a
 // wildcard path parameter that greedily matches all characters, with "*" as its
 // name. The `PathParams` can be used to get those declared path parameters
 // after a request is matched.
