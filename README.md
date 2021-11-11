@@ -21,6 +21,7 @@ wraps [net/http](https://pkg.go.dev/net/http).
 	* Sub-router support
 * Middleware
 * Zero third-party dependencies
+* 100% code coverage
 
 ## Installation
 
