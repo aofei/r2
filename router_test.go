@@ -228,6 +228,26 @@ func TestRouterHandler(t *testing.T) {
 	} else if want := "true"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
 	} else if got, want := req.URL.Query().Get("foo"), "bar"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+
+	h = http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+		Defer(req, func() {
+			fmt.Fprint(rw, "deferred")
+		})
+	})
+
+	r = &Router{}
+	r.Handle("", "/", h)
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	rec = httptest.NewRecorder()
+	r.Handler(req).ServeHTTP(rec, req)
+	recr = rec.Result()
+	if want := http.StatusOK; recr.StatusCode != want {
+		t.Errorf("got %d, want %d", recr.StatusCode, want)
+	} else if b, err := ioutil.ReadAll(recr.Body); err != nil {
+		t.Fatalf("unexpected error %q", err)
+	} else if want := "deferred"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
 	}
 }
@@ -869,7 +889,7 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 
-	r.Handle(http.MethodGet, "/foo/bar", http.HandlerFunc(func(
+	r.Handle("", "/foo/bar", http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
@@ -878,6 +898,30 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 	}))
 
 	req = httptest.NewRequest(http.MethodGet, "/foo/bar", nil)
+	rec = httptest.NewRecorder()
+	r.Handler(req).ServeHTTP(rec, req)
+	recr = rec.Result()
+	if want := http.StatusOK; recr.StatusCode != want {
+		t.Errorf("got %d, want %d", recr.StatusCode, want)
+	} else if b, err := ioutil.ReadAll(recr.Body); err != nil {
+		t.Fatalf("unexpected error %q", err)
+	} else if want := "GET /foo/bar"; string(b) != want {
+		t.Errorf("got %q, want %q", b, want)
+	}
+
+	req = httptest.NewRequest(http.MethodHead, "/foo/bar", nil)
+	rec = httptest.NewRecorder()
+	r.Handler(req).ServeHTTP(rec, req)
+	recr = rec.Result()
+	if want := http.StatusOK; recr.StatusCode != want {
+		t.Errorf("got %d, want %d", recr.StatusCode, want)
+	} else if b, err := ioutil.ReadAll(recr.Body); err != nil {
+		t.Fatalf("unexpected error %q", err)
+	} else if want := "GET /foo/bar"; string(b) != want {
+		t.Errorf("got %q, want %q", b, want)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/foo/bar", nil)
 	rec = httptest.NewRecorder()
 	r.Handler(req).ServeHTTP(rec, req)
 	recr = rec.Result()
