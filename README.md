@@ -19,6 +19,8 @@ wraps [net/http](https://pkg.go.dev/net/http).
 	* Based on the [Radix Tree](https://en.wikipedia.org/wiki/Radix_tree)
 	* Zero dynamic memory allocations
 	* Sub-router support
+	* Path parameter support
+	* Path auto-correction support
 * Middleware
 * Zero third-party dependencies
 * 100% code coverage
