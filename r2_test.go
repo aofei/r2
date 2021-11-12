@@ -395,31 +395,3 @@ func TestValues(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
-
-func TestDefer(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	Defer(req, func() {})
-	if di := context.Background().Value(dataKey); di != nil {
-		t.Errorf("got %v, want nil", di)
-	}
-
-	d := map[interface{}]interface{}{}
-	req = req.WithContext(context.WithValue(
-		context.Background(),
-		dataKey,
-		d,
-	))
-
-	Defer(req, nil)
-	if _, ok := d[deferredFuncsKey]; ok {
-		t.Error("want false")
-	}
-
-	Defer(req, func() {})
-	Defer(req, func() {})
-	if dfsi, ok := d[deferredFuncsKey]; !ok {
-		t.Error("want true")
-	} else if got, want := len(dfsi.([]func())), 2; got != want {
-		t.Errorf("got %d, want %d", got, want)
-	}
-}

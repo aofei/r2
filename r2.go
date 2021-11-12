@@ -19,7 +19,6 @@ const (
 	pathKey
 	pathParamsKey
 	valuesKey
-	deferredFuncsKey
 )
 
 // data returns request-scoped data of the `req`.
@@ -142,23 +141,4 @@ func Values(req *http.Request) map[interface{}]interface{} {
 	d[valuesKey] = vs
 
 	return vs
-}
-
-// Defer pushes the `f` onto the stack of functions that will be called after
-// the matched `http.Handler` for the `req` returns.
-func Defer(req *http.Request, f func()) {
-	d := data(req)
-	if d == nil {
-		return
-	}
-
-	if f == nil {
-		return
-	}
-
-	if dfsi, ok := d[deferredFuncsKey]; ok {
-		d[deferredFuncsKey] = append(dfsi.([]func()), f)
-	} else {
-		d[deferredFuncsKey] = []func(){f}
-	}
 }

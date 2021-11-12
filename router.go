@@ -546,13 +546,6 @@ func (r *Router) Handler(req *http.Request) http.Handler {
 
 		ctx := context.WithValue(req.Context(), dataKey, data)
 		h.ServeHTTP(rw, req.WithContext(ctx))
-
-		if dfsi, ok := data[deferredFuncsKey]; ok {
-			dfs := dfsi.([]func())
-			for i := len(dfs) - 1; i >= 0; i-- {
-				dfs[i]()
-			}
-		}
 	})
 }
 
