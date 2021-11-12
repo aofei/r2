@@ -156,14 +156,14 @@ func TestRouterHandle(t *testing.T) {
 
 func TestRouterHandler(t *testing.T) {
 	h := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		fmt.Fprint(rw, Values(req)["middleware"])
+		fmt.Fprint(rw, req.Host == "www.example.com")
 	})
 	mwf := MiddlewareFunc(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(
 			rw http.ResponseWriter,
 			req *http.Request,
 		) {
-			Values(req)["middleware"] = true
+			req.Host = "www.example.com"
 			next.ServeHTTP(rw, req)
 		})
 	})

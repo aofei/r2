@@ -18,7 +18,6 @@ const (
 	routeNodeKey
 	pathKey
 	pathParamsKey
-	valuesKey
 )
 
 // data returns request-scoped data of the `req`.
@@ -120,25 +119,4 @@ func unescapePathParamValue(s string) string {
 	}
 
 	return s
-}
-
-// Values returns request-scoped values of the `req`.
-//
-// Note that the returned `map[interface{}]interface{}` is always non-nil,
-// unless the `req` is not from the `http.Handler` returned by the
-// `Router.Handler`.
-func Values(req *http.Request) map[interface{}]interface{} {
-	d := data(req)
-	if d == nil {
-		return nil
-	}
-
-	if vsi, ok := d[valuesKey]; ok {
-		return vsi.(map[interface{}]interface{})
-	}
-
-	vs := map[interface{}]interface{}{}
-	d[valuesKey] = vs
-
-	return vs
 }
