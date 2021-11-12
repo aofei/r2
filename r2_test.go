@@ -56,11 +56,10 @@ func TestPathParams(t *testing.T) {
 		dataKey,
 		map[interface{}]interface{}{
 			routeNodeKey: &routeNode{
-				pathParamSlots: map[int]*pathParamSlot{
-					2: {name: "first"},
-					3: {name: "second"},
+				pathParamSlots: []*pathParamSlot{
+					{number: 2, name: "first"},
+					{number: 3, name: "second"},
 				},
-				maxPathParamSlot: 3,
 			},
 			pathKey: "/base/foo/bar/foobar",
 		},
@@ -82,11 +81,10 @@ func TestPathParams(t *testing.T) {
 		dataKey,
 		map[interface{}]interface{}{
 			routeNodeKey: &routeNode{
-				pathParamSlots: map[int]*pathParamSlot{
-					1: {name: "first"},
-					2: {name: "second"},
+				pathParamSlots: []*pathParamSlot{
+					{number: 1, name: "first"},
+					{number: 2, name: "second"},
 				},
-				maxPathParamSlot: 2,
 			},
 			pathKey: "/foo/bar",
 		},
@@ -108,11 +106,10 @@ func TestPathParams(t *testing.T) {
 		dataKey,
 		map[interface{}]interface{}{
 			routeNodeKey: &routeNode{
-				pathParamSlots: map[int]*pathParamSlot{
-					1: {name: "first"},
-					2: {name: "second"},
+				pathParamSlots: []*pathParamSlot{
+					{number: 1, name: "first"},
+					{number: 2, name: "second"},
 				},
-				maxPathParamSlot: 2,
 			},
 			pathKey: "/foo//bar",
 		},
@@ -134,11 +131,10 @@ func TestPathParams(t *testing.T) {
 		dataKey,
 		map[interface{}]interface{}{
 			routeNodeKey: &routeNode{
-				pathParamSlots: map[int]*pathParamSlot{
-					1: {name: "first"},
-					2: {name: "second"},
+				pathParamSlots: []*pathParamSlot{
+					{number: 1, name: "first"},
+					{number: 2, name: "second"},
 				},
-				maxPathParamSlot: 2,
 			},
 			pathKey: "/foo/bar/",
 		},
@@ -160,11 +156,10 @@ func TestPathParams(t *testing.T) {
 		dataKey,
 		map[interface{}]interface{}{
 			routeNodeKey: &routeNode{
-				pathParamSlots: map[int]*pathParamSlot{
-					1: {name: "first"},
-					2: {name: "second"},
+				pathParamSlots: []*pathParamSlot{
+					{number: 1, name: "first"},
+					{number: 2, name: "second"},
 				},
-				maxPathParamSlot: 2,
 			},
 			pathKey: "/foo/",
 		},
@@ -188,10 +183,9 @@ func TestPathParams(t *testing.T) {
 		dataKey,
 		map[interface{}]interface{}{
 			routeNodeKey: &routeNode{
-				pathParamSlots: map[int]*pathParamSlot{
-					1: {name: "first"},
+				pathParamSlots: []*pathParamSlot{
+					{number: 0, name: "first"},
 				},
-				maxPathParamSlot: 0,
 			},
 			pathKey: "/foo",
 		},
@@ -213,10 +207,9 @@ func TestPathParams(t *testing.T) {
 		dataKey,
 		map[interface{}]interface{}{
 			routeNodeKey: &routeNode{
-				pathParamSlots: map[int]*pathParamSlot{
-					2: {name: "second"},
+				pathParamSlots: []*pathParamSlot{
+					{number: 2, name: "second"},
 				},
-				maxPathParamSlot: 2,
 			},
 			pathKey: "/foo",
 		},
@@ -242,12 +235,11 @@ func TestPathParams(t *testing.T) {
 		dataKey,
 		map[interface{}]interface{}{
 			routeNodeKey: &routeNode{
-				pathParamSlots: map[int]*pathParamSlot{
-					2: {name: "first"},
-					3: {name: "second"},
-					4: {name: "*"},
+				pathParamSlots: []*pathParamSlot{
+					{number: 2, name: "first"},
+					{number: 3, name: "second"},
+					{number: 4, name: "*"},
 				},
-				maxPathParamSlot: 4,
 			},
 			pathKey: "/base/foo/bar/wildcard/foobar",
 		},
@@ -271,12 +263,11 @@ func TestPathParams(t *testing.T) {
 		dataKey,
 		map[interface{}]interface{}{
 			routeNodeKey: &routeNode{
-				pathParamSlots: map[int]*pathParamSlot{
-					1: {name: "first"},
-					2: {name: "second"},
-					3: {name: "*"},
+				pathParamSlots: []*pathParamSlot{
+					{number: 1, name: "first"},
+					{number: 2, name: "second"},
+					{number: 3, name: "*"},
 				},
-				maxPathParamSlot: 3,
 			},
 			pathKey: "/foo/bar/wildcard/foobar",
 		},
@@ -300,12 +291,11 @@ func TestPathParams(t *testing.T) {
 		dataKey,
 		map[interface{}]interface{}{
 			routeNodeKey: &routeNode{
-				pathParamSlots: map[int]*pathParamSlot{
-					1: {name: "first"},
-					2: {name: "second"},
-					3: {name: "*"},
+				pathParamSlots: []*pathParamSlot{
+					{number: 1, name: "first"},
+					{number: 2, name: "second"},
+					{number: 3, name: "*"},
 				},
-				maxPathParamSlot: 3,
 			},
 			pathKey: "/foo//bar///wildcard///foobar",
 		},
@@ -329,12 +319,11 @@ func TestPathParams(t *testing.T) {
 		dataKey,
 		map[interface{}]interface{}{
 			routeNodeKey: &routeNode{
-				pathParamSlots: map[int]*pathParamSlot{
-					1: {name: "first"},
-					2: {name: "second"},
-					3: {name: "*"},
+				pathParamSlots: []*pathParamSlot{
+					{number: 1, name: "first"},
+					{number: 2, name: "second"},
+					{number: 3, name: "*"},
 				},
-				maxPathParamSlot: 3,
 			},
 			pathKey: "/foo/bar/",
 		},

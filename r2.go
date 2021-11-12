@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// key is the key of the request scoped data.
+// key is the key of the request-scoped data.
 type key uint8
 
 // The keys.
@@ -22,7 +22,7 @@ const (
 	deferredFuncsKey
 )
 
-// data returns request scoped data of the `req`.
+// data returns request-scoped data of the `req`.
 func data(req *http.Request) map[interface{}]interface{} {
 	if vsi := req.Context().Value(dataKey); vsi != nil {
 		return vsi.(map[interface{}]interface{})
@@ -49,48 +49,58 @@ func PathParams(req *http.Request) url.Values {
 		pps := make(url.Values, len(rn.pathParamSlots))
 
 		path := d[pathKey].(string)
-		for i, l, slot := 0, len(path), 0; i < l; i++ {
+		ppsl := len(rn.pathParamSlots)
+		maxPathParamSlot := rn.pathParamSlots[ppsl-1].number
+		for i, l, slot, ppsi := 0, len(path), 0, 0; i < l; i++ {
 			if path[i] == '/' {
 				i++
 				for ; i < l && path[i] == '/'; i++ {
 				}
 
 				slot++
-				if slot > rn.maxPathParamSlot {
+				if slot > maxPathParamSlot {
 					break
 				}
 			}
 
-			s, ok := rn.pathParamSlots[slot]
-			if !ok {
+			if slot < rn.pathParamSlots[ppsi].number {
 				j := strings.IndexByte(path[i:], '/')
-				if j > 0 {
-					i += j - 1
-					continue
-				}
-
-				break // This should never happen
-			}
-
-			n := s.name
-			i += s.offset
-
-			if n == "*" {
-				pps.Add(n, unescapePathParamValue(path[i:]))
-				break
-			}
-
-			if j := strings.IndexByte(path[i:], '/'); j > 0 {
-				pps.Add(n, unescapePathParamValue(path[i:i+j]))
-				if slot == rn.maxPathParamSlot {
+				if j < 0 { // This should never happen
 					break
 				}
 
 				i += j - 1
-			} else {
-				pps.Add(n, unescapePathParamValue(path[i:]))
+
+				continue
+			}
+
+			i += rn.pathParamSlots[ppsi].offset
+
+			if rn.pathParamSlots[ppsi].name == "*" {
+				pps.Add("*", unescapePathParamValue(path[i:]))
 				break
 			}
+
+			j := strings.IndexByte(path[i:], '/')
+			if j < 0 {
+				pps.Add(
+					rn.pathParamSlots[ppsi].name,
+					unescapePathParamValue(path[i:]),
+				)
+				break
+			}
+
+			pps.Add(
+				rn.pathParamSlots[ppsi].name,
+				unescapePathParamValue(path[i:i+j]),
+			)
+
+			ppsi++
+			if ppsi > ppsl-1 {
+				break
+			}
+
+			i += j - 1
 		}
 
 		d[pathParamsKey] = pps
@@ -113,7 +123,7 @@ func unescapePathParamValue(s string) string {
 	return s
 }
 
-// Values returns request scoped arbitrary values of the `req`.
+// Values returns request-scoped values of the `req`.
 //
 // Note that the returned `map[interface{}]interface{}` is always non-nil,
 // unless the `req` is not from the `http.Handler` returned by the

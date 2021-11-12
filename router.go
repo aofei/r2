@@ -160,8 +160,7 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 		h.ServeHTTP(rw, req)
 	})
 
-	pathParamSlots := map[int]*pathParamSlot{}
-	maxPathParamSlot := 0
+	var pathParamSlots []*pathParamSlot
 	for i, l, slot := 0, len(path), 0; i < l; i++ {
 		switch path[i] {
 		case '/':
@@ -173,7 +172,6 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 				nil,
 				staticRouteNode,
 				nil,
-				0,
 			)
 
 			offset := i - strings.LastIndexByte(path[:i], '/') - 1
@@ -182,11 +180,11 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 			for ; i < l && path[i] != '/'; i++ {
 			}
 
-			maxPathParamSlot = slot
-			pathParamSlots[maxPathParamSlot] = &pathParamSlot{
+			pathParamSlots = append(pathParamSlots, &pathParamSlot{
+				number: slot,
 				name:   path[j:i],
 				offset: offset,
-			}
+			})
 
 			path = path[:j] + path[i:]
 
@@ -197,7 +195,6 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 					rh,
 					paramRouteNode,
 					pathParamSlots,
-					maxPathParamSlot,
 				)
 				return
 			}
@@ -208,7 +205,6 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 				nil,
 				paramRouteNode,
 				pathParamSlots,
-				maxPathParamSlot,
 			)
 
 			slot++
@@ -219,7 +215,6 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 				nil,
 				staticRouteNode,
 				nil,
-				0,
 			)
 
 			offset := i - strings.LastIndexByte(path[:i], '/') - 1
@@ -236,16 +231,15 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 						r.tsrHandler(),
 						staticRouteNode,
 						nil,
-						0,
 					)
 				}
 			}
 
-			maxPathParamSlot = slot
-			pathParamSlots[maxPathParamSlot] = &pathParamSlot{
+			pathParamSlots = append(pathParamSlots, &pathParamSlot{
+				number: slot,
 				name:   "*",
 				offset: offset,
-			}
+			})
 
 			r.insertRoute(
 				method,
@@ -253,21 +247,13 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 				rh,
 				wildcardParamRouteNode,
 				pathParamSlots,
-				maxPathParamSlot,
 			)
 
 			return
 		}
 	}
 
-	r.insertRoute(
-		method,
-		path,
-		rh,
-		staticRouteNode,
-		pathParamSlots,
-		maxPathParamSlot,
-	)
+	r.insertRoute(method, path, rh, staticRouteNode, pathParamSlots)
 }
 
 // insertRoute inserts a new route into the `r.routeTree`.
@@ -276,8 +262,7 @@ func (r *Router) insertRoute(
 	path string,
 	h http.Handler,
 	nt routeNodeType,
-	pathParamSlots map[int]*pathParamSlot,
-	maxPathParamSlot int,
+	pathParamSlots []*pathParamSlot,
 ) {
 	var (
 		s  = path        // Search
@@ -305,19 +290,17 @@ func (r *Router) insertRoute(
 			cn.label = s[0]
 			cn.typ = nt
 			cn.pathParamSlots = pathParamSlots
-			cn.maxPathParamSlot = maxPathParamSlot
 			if h != nil {
 				cn.handlers[method] = h
 			}
 		} else if ll < pl { // Split node
 			nn = &routeNode{
-				prefix:           cn.prefix[ll:],
-				label:            cn.prefix[ll],
-				typ:              cn.typ,
-				children:         cn.children,
-				pathParamSlots:   cn.pathParamSlots,
-				maxPathParamSlot: cn.maxPathParamSlot,
-				handlers:         cn.handlers,
+				prefix:         cn.prefix[ll:],
+				label:          cn.prefix[ll],
+				typ:            cn.typ,
+				children:       cn.children,
+				pathParamSlots: cn.pathParamSlots,
+				handlers:       cn.handlers,
 			}
 
 			// Reset current node.
@@ -326,23 +309,20 @@ func (r *Router) insertRoute(
 			cn.typ = staticRouteNode
 			cn.children = []*routeNode{nn}
 			cn.pathParamSlots = nil
-			cn.maxPathParamSlot = 0
 			cn.handlers = map[string]http.Handler{}
 
 			if ll == sl { // At current node
 				cn.typ = nt
 				cn.pathParamSlots = pathParamSlots
-				cn.maxPathParamSlot = maxPathParamSlot
 				if h != nil {
 					cn.handlers[method] = h
 				}
 			} else { // Create child node
 				nn = &routeNode{
-					prefix:           s[ll:],
-					label:            s[ll],
-					typ:              nt,
-					pathParamSlots:   pathParamSlots,
-					maxPathParamSlot: maxPathParamSlot,
+					prefix:         s[ll:],
+					label:          s[ll],
+					typ:            nt,
+					pathParamSlots: pathParamSlots,
 				}
 				if h != nil {
 					nn.handlers = map[string]http.Handler{
@@ -364,11 +344,10 @@ func (r *Router) insertRoute(
 
 			// Create child node.
 			nn = &routeNode{
-				prefix:           s,
-				label:            s[0],
-				typ:              nt,
-				pathParamSlots:   pathParamSlots,
-				maxPathParamSlot: maxPathParamSlot,
+				prefix:         s,
+				label:          s[0],
+				typ:            nt,
+				pathParamSlots: pathParamSlots,
 			}
 			if h != nil {
 				nn.handlers = map[string]http.Handler{
@@ -382,7 +361,6 @@ func (r *Router) insertRoute(
 		} else { // Node already exists
 			if len(cn.pathParamSlots) == 0 {
 				cn.pathParamSlots = pathParamSlots
-				cn.maxPathParamSlot = maxPathParamSlot
 			}
 
 			if h != nil {
@@ -650,13 +628,12 @@ func (r *Router) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 // routeNode is the node of the route radix tree.
 type routeNode struct {
-	prefix           string
-	label            byte
-	typ              routeNodeType
-	children         []*routeNode
-	pathParamSlots   map[int]*pathParamSlot
-	maxPathParamSlot int
-	handlers         map[string]http.Handler
+	prefix         string
+	label          byte
+	typ            routeNodeType
+	children       []*routeNode
+	pathParamSlots []*pathParamSlot
+	handlers       map[string]http.Handler
 }
 
 // child returns a child node of the `rn` for the `label` and `typ`.
@@ -704,6 +681,7 @@ const (
 
 // pathParamSlot is the path parameter slot.
 type pathParamSlot struct {
+	number int
 	name   string
 	offset int
 }
