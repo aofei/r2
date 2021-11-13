@@ -16,8 +16,7 @@ wraps [net/http](https://pkg.go.dev/net/http).
 * Extremely easy to use
 * Router
 	* Blazing fast
-	* Based on the [Radix Tree](https://en.wikipedia.org/wiki/Radix_tree)
-	* Zero dynamic memory allocations
+	* Based on [radix tree](https://en.wikipedia.org/wiki/Radix_tree)
 	* Sub-router support
 	* Path parameter support
 	* Path auto-correction support
@@ -53,11 +52,11 @@ import (
 
 func main() {
 	r := &r2.Router{}
-	r.Handle("", "/hello/:name", http.HandlerFunc(handleHello))
+	r.Handle("", "/hello/:name", http.HandlerFunc(hello))
 	http.ListenAndServe("localhost:8080", r)
 }
 
-func handleHello(rw http.ResponseWriter, req *http.Request) {
+func hello(rw http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(rw, "Hello, %s\n", r2.PathParams(req).Get("name"))
 }
 ```

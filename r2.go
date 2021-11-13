@@ -9,114 +9,95 @@ import (
 	"strings"
 )
 
-// key is the key of the request-scoped data.
-type key uint8
+// contextKey is the context key.
+type contextKey uint8
 
-// The keys.
+// The context keys.
 const (
-	dataKey key = iota
-	routeNodeKey
-	pathKey
-	pathParamsKey
+	matchDataContextKey contextKey = iota
 )
-
-// data returns request-scoped data of the `req`.
-func data(req *http.Request) map[interface{}]interface{} {
-	if vsi := req.Context().Value(dataKey); vsi != nil {
-		return vsi.(map[interface{}]interface{})
-	}
-
-	return nil
-}
 
 // PathParams returns parsed path parameters of the `req`.
 //
-// Note that the returned `url.Values` is always non-nil, unless the `req` is
-// not from the `http.Handler` returned by the `Router.Handler`.
+// Note that the returned `url.Values` is always non-nil.
 func PathParams(req *http.Request) url.Values {
-	d := data(req)
-	if d == nil {
-		return nil
+	md, ok := req.Context().Value(matchDataContextKey).(*matchData)
+	if !ok {
+		return url.Values{}
 	}
 
-	if ppsi, ok := d[pathParamsKey]; ok {
-		return ppsi.(url.Values)
+	if md.pathParams != nil {
+		return md.pathParams
 	}
 
-	if rn := d[routeNodeKey].(*routeNode); len(rn.pathParamSlots) > 0 {
-		pps := make(url.Values, len(rn.pathParamSlots))
-
-		path := d[pathKey].(string)
-		ppsl := len(rn.pathParamSlots)
-		maxPathParamSlot := rn.pathParamSlots[ppsl-1].number
-		for i, l, slot, ppsi := 0, len(path), 0, 0; i < l; i++ {
-			if path[i] == '/' {
-				i++
-				for ; i < l && path[i] == '/'; i++ {
-				}
-
-				slot++
-				if slot > maxPathParamSlot {
-					break
-				}
+	ppsl := len(md.pathParamSlots)
+	pps := make(url.Values, ppsl)
+	maxPPS := md.pathParamSlots[ppsl-1].number
+	for i, l, slot, ppsi := 0, len(md.path), 0, 0; i < l; i++ {
+		if md.path[i] == '/' {
+			i++
+			for ; i < l && md.path[i] == '/'; i++ {
 			}
 
-			if slot < rn.pathParamSlots[ppsi].number {
-				j := strings.IndexByte(path[i:], '/')
-				if j < 0 { // This should never happen
-					break
-				}
-
-				i += j - 1
-
-				continue
-			}
-
-			i += rn.pathParamSlots[ppsi].offset
-
-			if rn.pathParamSlots[ppsi].name == "*" {
-				pps.Add("*", unescapePathParamValue(path[i:]))
+			slot++
+			if slot > maxPPS {
 				break
 			}
+		}
 
-			j := strings.IndexByte(path[i:], '/')
-			if j < 0 {
-				pps.Add(
-					rn.pathParamSlots[ppsi].name,
-					unescapePathParamValue(path[i:]),
-				)
-				break
-			}
-
-			pps.Add(
-				rn.pathParamSlots[ppsi].name,
-				unescapePathParamValue(path[i:i+j]),
-			)
-
-			ppsi++
-			if ppsi > ppsl-1 {
+		if slot < md.pathParamSlots[ppsi].number {
+			j := strings.IndexByte(md.path[i:], '/')
+			if j < 0 { // This should never happen
 				break
 			}
 
 			i += j - 1
+
+			continue
 		}
 
-		d[pathParamsKey] = pps
+		i += md.pathParamSlots[ppsi].offset
 
-		return pps
+		if md.pathParamSlots[ppsi].name == "*" {
+			addPathParam(pps, "*", md.path[i:])
+			break
+		}
+
+		j := strings.IndexByte(md.path[i:], '/')
+		if j < 0 {
+			addPathParam(
+				pps,
+				md.pathParamSlots[ppsi].name,
+				md.path[i:],
+			)
+			break
+		}
+
+		addPathParam(pps, md.pathParamSlots[ppsi].name, md.path[i:i+j])
+
+		ppsi++
+		if ppsi >= ppsl {
+			break
+		}
+
+		i += j - 1
 	}
 
-	pps := url.Values{}
-	d[pathParamsKey] = pps
+	md.pathParams = pps
 
 	return pps
 }
 
-// unescapePathParamValue unescapes the `s` as a path parameter value.
-func unescapePathParamValue(s string) string {
-	if us, err := url.PathUnescape(s); err == nil {
-		return us
+// addPathParam adds the `name` and `rawValue` as a path parameter to the `vs`.
+func addPathParam(vs url.Values, name, rawValue string) {
+	value, err := url.PathUnescape(rawValue)
+	if err != nil {
+		value = rawValue
 	}
 
-	return s
+	if len(vs[name]) == 0 {
+		vs[name] = []string{value}
+	} else {
+		vs.Add(name, value)
+	}
 }

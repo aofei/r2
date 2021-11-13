@@ -34,7 +34,7 @@ func TestRouterHandle(t *testing.T) {
 	r.Handle("", "/", http.NotFoundHandler())
 	if r.routeTree == nil {
 		t.Fatal("unexpected nil")
-	} else if r.routeTree.handlers == nil {
+	} else if r.routeTree.methodHandlerSet == nil {
 		t.Fatal("unexpected nil")
 	} else if r.registeredRoutes == nil {
 		t.Fatal("unexpected nil")
@@ -56,7 +56,7 @@ func TestRouterHandle(t *testing.T) {
 		t.Errorf("got %v, want nil", sr.overridableRoutes)
 	} else if r.routeTree == nil {
 		t.Fatal("unexpected nil")
-	} else if r.routeTree.handlers == nil {
+	} else if r.routeTree.methodHandlerSet == nil {
 		t.Fatal("unexpected nil")
 	} else if r.registeredRoutes == nil {
 		t.Fatal("unexpected nil")
@@ -172,7 +172,8 @@ func TestRouterHandler(t *testing.T) {
 	r.Handle("", "/", h, mwf)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq := r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr := rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -190,7 +191,8 @@ func TestRouterHandler(t *testing.T) {
 	sr.Handle("", "/", h, mwf)
 	req = httptest.NewRequest(http.MethodGet, "/foo/", nil)
 	rec = httptest.NewRecorder()
-	sr.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = sr.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -203,9 +205,11 @@ func TestRouterHandler(t *testing.T) {
 	r = &Router{}
 	r.Handle("", "/", h, mwf)
 	req = httptest.NewRequest(http.MethodGet, "/", nil)
-	req.RequestURI = ""
+	req.URL.RawPath = ""
+	req.URL.Path = ""
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusNotFound; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -219,7 +223,8 @@ func TestRouterHandler(t *testing.T) {
 	r.Handle("", "/", h, mwf)
 	req = httptest.NewRequest(http.MethodGet, "/?foo=bar", nil)
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -261,7 +266,8 @@ func TestRouterHandler_static(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq := r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr := rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -273,7 +279,8 @@ func TestRouterHandler_static(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "//", nil)
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -285,7 +292,8 @@ func TestRouterHandler_static(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foobar", nil)
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -297,7 +305,8 @@ func TestRouterHandler_static(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foo/bar", nil)
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -309,7 +318,8 @@ func TestRouterHandler_static(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foo/bar/", nil)
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -321,7 +331,8 @@ func TestRouterHandler_static(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foo", nil)
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusNotFound; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -333,7 +344,8 @@ func TestRouterHandler_static(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foo/bar/foobar", nil)
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusNotFound; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -345,7 +357,8 @@ func TestRouterHandler_static(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodHead, "/", nil)
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusMethodNotAllowed; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -359,18 +372,17 @@ func TestRouterHandler_static(t *testing.T) {
 func TestRouterHandler_param(t *testing.T) {
 	r := &Router{}
 
-	var hReq *http.Request
 	r.Handle(http.MethodGet, "/:foobar", http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /:foobar")
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq := r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr := rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -378,9 +390,7 @@ func TestRouterHandler_param(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /:foobar"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("foobar"), ""; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -388,8 +398,8 @@ func TestRouterHandler_param(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "//", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -397,9 +407,7 @@ func TestRouterHandler_param(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /:foobar"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("foobar"), ""; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -407,8 +415,8 @@ func TestRouterHandler_param(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foobar", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -416,9 +424,7 @@ func TestRouterHandler_param(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /:foobar"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("foobar"), "foobar"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -426,7 +432,8 @@ func TestRouterHandler_param(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foobar/", nil)
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusNotFound; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -440,14 +447,13 @@ func TestRouterHandler_param(t *testing.T) {
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /foo:bar")
 	}))
 
 	req = httptest.NewRequest(http.MethodGet, "/foo", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -455,9 +461,7 @@ func TestRouterHandler_param(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /foo:bar"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("bar"), ""; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -465,8 +469,8 @@ func TestRouterHandler_param(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foobar", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -474,9 +478,7 @@ func TestRouterHandler_param(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /foo:bar"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("bar"), "bar"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -486,14 +488,13 @@ func TestRouterHandler_param(t *testing.T) {
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /:foo/:bar")
 	}))
 
 	req = httptest.NewRequest(http.MethodGet, "/foo/bar", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -501,9 +502,7 @@ func TestRouterHandler_param(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /:foo/:bar"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("foo"), "foo"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -515,18 +514,17 @@ func TestRouterHandler_param(t *testing.T) {
 func TestRouterHandler_wildcardParam(t *testing.T) {
 	r := &Router{}
 
-	var hReq *http.Request
 	r.Handle(http.MethodGet, "/*", http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /*")
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq := r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr := rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -534,9 +532,7 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), ""; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -544,8 +540,8 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "//", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -553,9 +549,7 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), ""; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -563,8 +557,8 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foobar", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -572,9 +566,7 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), "foobar"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -582,8 +574,8 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foobar/", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -591,9 +583,7 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), "foobar/"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -601,8 +591,8 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foobar//", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -610,9 +600,7 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), "foobar//"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -620,8 +608,8 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foo/bar", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -629,9 +617,7 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), "foo/bar"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -639,8 +625,8 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foo/bar/", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -648,9 +634,7 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), "foo/bar/"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -658,8 +642,8 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foo/bar//", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -667,9 +651,7 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), "foo/bar//"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -679,14 +661,13 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /foobar*")
 	}))
 
 	req = httptest.NewRequest(http.MethodGet, "/foobar", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -694,9 +675,7 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /foobar*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), ""; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -704,8 +683,8 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foobar/", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -713,9 +692,7 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /foobar*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), "/"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -723,8 +700,8 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foobar//", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -732,9 +709,7 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /foobar*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), "//"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -744,14 +719,13 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /foobar/*")
 	}))
 
 	req = httptest.NewRequest(http.MethodGet, "/foobar/", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -759,9 +733,7 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /foobar/*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), ""; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -771,14 +743,13 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /foobar2/*")
 	}))
 
 	req = httptest.NewRequest(http.MethodGet, "/foobar2/", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -786,9 +757,7 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /foobar2/*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), ""; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -798,14 +767,13 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /foo/bar/*")
 	}))
 
 	req = httptest.NewRequest(http.MethodGet, "/foo/bar/", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -813,9 +781,7 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /foo/bar/*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), ""; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -823,7 +789,8 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foo/bar", nil)
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusMovedPermanently; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -835,7 +802,8 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foo/bar?foo=bar", nil)
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusMovedPermanently; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -847,7 +815,8 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodHead, "/foo/bar", nil)
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusMovedPermanently; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -859,7 +828,8 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/foo/bar", nil)
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusMovedPermanently; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -873,13 +843,13 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /foo/bar")
 	}))
 
 	req = httptest.NewRequest(http.MethodGet, "/foo/bar", nil)
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -891,7 +861,8 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodHead, "/foo/bar", nil)
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -903,7 +874,8 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/foo/bar", nil)
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -917,14 +889,13 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /bar/foo*")
 	}))
 
 	req = httptest.NewRequest(http.MethodGet, "/bar/foo", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -932,9 +903,7 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /bar/foo*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), ""; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -942,8 +911,8 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/bar/", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -951,9 +920,7 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), "bar/"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -962,103 +929,89 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 
 func TestRouterHandler_mixed(t *testing.T) {
 	r := &Router{}
-
-	var hReq *http.Request
 	r.Handle(http.MethodGet, "/", http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /")
 	}))
 	r.Handle(http.MethodGet, "/foo", http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /foo")
 	}))
 	r.Handle(http.MethodGet, "/bar", http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /bar")
 	}))
 	r.Handle(http.MethodGet, "/foobar", http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /foobar")
 	}))
 	r.Handle(http.MethodGet, "/:foobar", http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /:foobar")
 	}))
 	r.Handle(http.MethodGet, "/foo/:bar", http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /foo/:bar")
 	}))
 	r.Handle(http.MethodGet, "/foo:bar", http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /foo:bar")
 	}))
 	r.Handle(http.MethodGet, "/:foo/:bar", http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /:foo/:bar")
 	}))
 	r.Handle(http.MethodGet, "/foobar*", http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /foobar*")
 	}))
 	r.Handle(http.MethodGet, "/foobar/*", http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /foobar/*")
 	}))
 	r.Handle(http.MethodGet, "/foo/:bar/*", http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /foo/:bar/*")
 	}))
 	r.Handle(http.MethodGet, "/foo:bar/*", http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /foo:bar/*")
 	}))
 	r.Handle(http.MethodGet, "/:foo/:bar/*", http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /:foo/:bar/*")
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq := r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr := rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -1070,7 +1023,8 @@ func TestRouterHandler_mixed(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foo", nil)
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -1082,7 +1036,8 @@ func TestRouterHandler_mixed(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/bar", nil)
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -1094,7 +1049,8 @@ func TestRouterHandler_mixed(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foobar", nil)
 	rec = httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -1106,8 +1062,8 @@ func TestRouterHandler_mixed(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/barfoo", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -1115,9 +1071,7 @@ func TestRouterHandler_mixed(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /:foobar"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("foobar"), "barfoo"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -1125,8 +1079,8 @@ func TestRouterHandler_mixed(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foo/", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -1134,9 +1088,7 @@ func TestRouterHandler_mixed(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /foo/:bar"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("bar"), ""; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -1144,8 +1096,8 @@ func TestRouterHandler_mixed(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foo/bar", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -1153,9 +1105,7 @@ func TestRouterHandler_mixed(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /foo/:bar"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("bar"), "bar"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -1163,8 +1113,8 @@ func TestRouterHandler_mixed(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/fooobar", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -1172,9 +1122,7 @@ func TestRouterHandler_mixed(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /foo:bar"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("bar"), "obar"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -1182,8 +1130,8 @@ func TestRouterHandler_mixed(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/bar/foo", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -1191,9 +1139,7 @@ func TestRouterHandler_mixed(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /:foo/:bar"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("foo"), "bar"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -1203,8 +1149,8 @@ func TestRouterHandler_mixed(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foobarfoobar", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -1212,9 +1158,7 @@ func TestRouterHandler_mixed(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /foobar*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), "foobar"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -1222,8 +1166,8 @@ func TestRouterHandler_mixed(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foobar/foobar", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -1231,9 +1175,7 @@ func TestRouterHandler_mixed(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /foobar/*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), "foobar"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -1241,8 +1183,8 @@ func TestRouterHandler_mixed(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foo/bar/foobar", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -1250,9 +1192,7 @@ func TestRouterHandler_mixed(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /foo/:bar/*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("bar"), "bar"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -1262,8 +1202,8 @@ func TestRouterHandler_mixed(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foofoobar/foobar", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -1271,9 +1211,7 @@ func TestRouterHandler_mixed(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /foo:bar/*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("bar"), "foobar"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -1283,8 +1221,8 @@ func TestRouterHandler_mixed(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/bar/foo/foobar", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -1292,9 +1230,7 @@ func TestRouterHandler_mixed(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /:foo/:bar/*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("foo"), "bar"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -1307,26 +1243,23 @@ func TestRouterHandler_mixed(t *testing.T) {
 
 func TestRouterHandler_fallback(t *testing.T) {
 	r := &Router{}
-
-	var hReq *http.Request
 	r.Handle(http.MethodGet, "/*", http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /*")
 	}))
 	r.Handle(http.MethodGet, "/:foo/:bar", http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
-		hReq = req
 		fmt.Fprint(rw, "GET /:foo/:bar")
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/foo", nil)
 	rec := httptest.NewRecorder()
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq := r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr := rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -1334,9 +1267,7 @@ func TestRouterHandler_fallback(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), "foo"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -1344,8 +1275,8 @@ func TestRouterHandler_fallback(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foobar", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -1353,9 +1284,7 @@ func TestRouterHandler_fallback(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), "foobar"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -1363,8 +1292,8 @@ func TestRouterHandler_fallback(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foo/bar", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -1372,9 +1301,7 @@ func TestRouterHandler_fallback(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /:foo/:bar"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("foo"), "foo"; got != want {
 		t.Errorf("got %q, want %q", got, want)
@@ -1384,8 +1311,8 @@ func TestRouterHandler_fallback(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodGet, "/foo/bar/foobar", nil)
 	rec = httptest.NewRecorder()
-	hReq = nil
-	r.Handler(req).ServeHTTP(rec, req)
+	mh, mreq = r.Handler(req)
+	mh.ServeHTTP(rec, mreq)
 	recr = rec.Result()
 	if want := http.StatusOK; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
@@ -1393,12 +1320,60 @@ func TestRouterHandler_fallback(t *testing.T) {
 		t.Fatalf("unexpected error %q", err)
 	} else if want := "GET /*"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
-	} else if hReq == nil {
-		t.Fatal("unexpected nil")
-	} else if pps := PathParams(hReq); pps == nil {
+	} else if pps := PathParams(mreq); pps == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := pps.Get("*"), "foo/bar/foobar"; got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestRouterServeHTTP(t *testing.T) {
+	r1 := &Router{
+		NotFoundHandler: http.HandlerFunc(func(
+			rw http.ResponseWriter,
+			req *http.Request,
+		) {
+			http.Error(rw, "r1: not found", http.StatusNotFound)
+		}),
+		routeTree: &routeNode{
+			methodHandlerSet: &methodHandlerSet{},
+		},
+		registeredRoutes:  map[string]bool{},
+		overridableRoutes: map[string]bool{},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	r1.ServeHTTP(rec, req)
+	recr := rec.Result()
+	if want := http.StatusNotFound; recr.StatusCode != want {
+		t.Errorf("got %d, want %d", recr.StatusCode, want)
+	} else if b, err := ioutil.ReadAll(recr.Body); err != nil {
+		t.Fatalf("unexpected error %q", err)
+	} else if want := "r1: not found\n"; string(b) != want {
+		t.Errorf("got %q, want %q", b, want)
+	}
+
+	r2 := &Router{
+		Parent: r1,
+		NotFoundHandler: http.HandlerFunc(func(
+			rw http.ResponseWriter,
+			req *http.Request,
+		) {
+			http.Error(rw, "r2: not found", http.StatusNotFound)
+		}),
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	rec = httptest.NewRecorder()
+	r2.ServeHTTP(rec, req)
+	recr = rec.Result()
+	if want := http.StatusNotFound; recr.StatusCode != want {
+		t.Errorf("got %d, want %d", recr.StatusCode, want)
+	} else if b, err := ioutil.ReadAll(recr.Body); err != nil {
+		t.Fatalf("unexpected error %q", err)
+	} else if want := "r1: not found\n"; string(b) != want {
+		t.Errorf("got %q, want %q", b, want)
 	}
 }
 
@@ -1543,101 +1518,239 @@ func TestRouterTSRHandler(t *testing.T) {
 	}
 }
 
-func TestRouterServeHTTP(t *testing.T) {
-	r1 := &Router{
-		NotFoundHandler: http.HandlerFunc(func(
-			rw http.ResponseWriter,
-			req *http.Request,
-		) {
-			http.Error(rw, "r1: not found", http.StatusNotFound)
-		}),
-		routeTree: &routeNode{
-			handlers: map[string]http.Handler{},
-		},
-		registeredRoutes:  map[string]bool{},
-		overridableRoutes: map[string]bool{},
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	rec := httptest.NewRecorder()
-	r1.ServeHTTP(rec, req)
-	recr := rec.Result()
-	if want := http.StatusNotFound; recr.StatusCode != want {
-		t.Errorf("got %d, want %d", recr.StatusCode, want)
-	} else if b, err := ioutil.ReadAll(recr.Body); err != nil {
-		t.Fatalf("unexpected error %q", err)
-	} else if want := "r1: not found\n"; string(b) != want {
-		t.Errorf("got %q, want %q", b, want)
-	}
-
-	r2 := &Router{
-		Parent: r1,
-		NotFoundHandler: http.HandlerFunc(func(
-			rw http.ResponseWriter,
-			req *http.Request,
-		) {
-			http.Error(rw, "r2: not found", http.StatusNotFound)
-		}),
-	}
-
-	req = httptest.NewRequest(http.MethodGet, "/", nil)
-	rec = httptest.NewRecorder()
-	r2.ServeHTTP(rec, req)
-	recr = rec.Result()
-	if want := http.StatusNotFound; recr.StatusCode != want {
-		t.Errorf("got %d, want %d", recr.StatusCode, want)
-	} else if b, err := ioutil.ReadAll(recr.Body); err != nil {
-		t.Fatalf("unexpected error %q", err)
-	} else if want := "r1: not found\n"; string(b) != want {
-		t.Errorf("got %q, want %q", b, want)
+func TestRouteNodeAddChild(t *testing.T) {
+	rn := &routeNode{}
+	rn.addChild(&routeNode{
+		label: 'a',
+		typ:   staticRouteNode,
+	})
+	rn.addChild(&routeNode{
+		label: ':',
+		typ:   paramRouteNode,
+	})
+	rn.addChild(&routeNode{
+		label: '*',
+		typ:   wildcardParamRouteNode,
+	})
+	if got, want := len(rn.staticChildren), 1; got != want {
+		t.Errorf("got %d, want %d", got, want)
+	} else if rn.paramChild == nil {
+		t.Fatal("unexpected nil")
+	} else if rn.wildcardParamChild == nil {
+		t.Fatal("unexpected nil")
 	}
 }
 
-func TestRouteNodeChild(t *testing.T) {
+func TestRouteNodeStaticChildByLabel(t *testing.T) {
 	rn := &routeNode{
-		children: []*routeNode{{
+		staticChildren: []*routeNode{{
 			label: 'a',
 			typ:   staticRouteNode,
 		}},
 	}
 
-	if crn := rn.child('b', paramRouteNode); crn != nil {
-		t.Errorf("got %v, want nil", crn)
+	if rn.staticChildByLabel('a') == nil {
+		t.Fatal("unexpected nil")
 	}
 
-	if crn := rn.child('a', staticRouteNode); crn == nil {
-		t.Fatal("unexpected nil")
+	if crn := rn.staticChildByLabel('b'); crn != nil {
+		t.Errorf("got %v, want nil", crn)
 	}
 }
 
-func TestRouteNodeLChild(t *testing.T) {
+func TestRouteNodeChildByLabel(t *testing.T) {
 	rn := &routeNode{
-		children: []*routeNode{{
+		staticChildren: []*routeNode{{
 			label: 'a',
+			typ:   staticRouteNode,
 		}},
+		paramChild: &routeNode{
+			label: ':',
+			typ:   paramRouteNode,
+		},
+		wildcardParamChild: &routeNode{
+			label: '*',
+			typ:   wildcardParamRouteNode,
+		},
 	}
 
-	if crn := rn.lChild('b'); crn != nil {
+	if rn.childByLabel('a') == nil {
+		t.Fatal("unexpected nil")
+	}
+
+	if crn := rn.childByLabel('b'); crn != nil {
 		t.Errorf("got %v, want nil", crn)
 	}
 
-	if crn := rn.lChild('a'); crn == nil {
+	if rn.childByLabel(':') == nil {
+		t.Fatal("unexpected nil")
+	}
+
+	if rn.childByLabel('*') == nil {
 		t.Fatal("unexpected nil")
 	}
 }
 
-func TestRouteNodeTChild(t *testing.T) {
+func TestRouteNodeAddHandler(t *testing.T) {
+	h := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+	})
+
 	rn := &routeNode{
-		children: []*routeNode{{
-			typ: staticRouteNode,
+		methodHandlerSet: &methodHandlerSet{},
+	}
+
+	rn.addHandler(http.MethodGet, h)
+	if rn.methodHandlerSet.get == nil {
+		t.Fatal("unexpected nil")
+	}
+
+	rn = &routeNode{
+		methodHandlerSet: &methodHandlerSet{},
+	}
+
+	rn.addHandler(http.MethodHead, h)
+	if rn.methodHandlerSet.head == nil {
+		t.Fatal("unexpected nil")
+	}
+
+	rn = &routeNode{
+		methodHandlerSet: &methodHandlerSet{},
+	}
+
+	rn.addHandler(http.MethodPost, h)
+	if rn.methodHandlerSet.post == nil {
+		t.Fatal("unexpected nil")
+	}
+
+	rn = &routeNode{
+		methodHandlerSet: &methodHandlerSet{},
+	}
+
+	rn.addHandler(http.MethodPut, h)
+	if rn.methodHandlerSet.put == nil {
+		t.Fatal("unexpected nil")
+	}
+
+	rn = &routeNode{
+		methodHandlerSet: &methodHandlerSet{},
+	}
+
+	rn.addHandler(http.MethodPatch, h)
+	if rn.methodHandlerSet.patch == nil {
+		t.Fatal("unexpected nil")
+	}
+
+	rn = &routeNode{
+		methodHandlerSet: &methodHandlerSet{},
+	}
+
+	rn.addHandler(http.MethodDelete, h)
+	if rn.methodHandlerSet.delete == nil {
+		t.Fatal("unexpected nil")
+	}
+
+	rn = &routeNode{
+		methodHandlerSet: &methodHandlerSet{},
+	}
+
+	rn.addHandler(http.MethodConnect, h)
+	if rn.methodHandlerSet.connect == nil {
+		t.Fatal("unexpected nil")
+	}
+
+	rn = &routeNode{
+		methodHandlerSet: &methodHandlerSet{},
+	}
+
+	rn.addHandler(http.MethodOptions, h)
+	if rn.methodHandlerSet.options == nil {
+		t.Fatal("unexpected nil")
+	}
+
+	rn = &routeNode{
+		methodHandlerSet: &methodHandlerSet{},
+	}
+
+	rn.addHandler(http.MethodTrace, h)
+	if rn.methodHandlerSet.trace == nil {
+		t.Fatal("unexpected nil")
+	}
+
+	rn = &routeNode{
+		methodHandlerSet: &methodHandlerSet{},
+	}
+
+	rn.addHandler("foobar", h)
+	if got, want := len(rn.unknownMethodHandlers), 1; got != want {
+		t.Errorf("got %d, want %d", got, want)
+	}
+
+	rn.unknownMethodHandlers[0].handler = nil
+	rn.addHandler("foobar", h)
+	if rn.unknownMethodHandlers[0].handler == nil {
+		t.Fatal("unexpected nil")
+	}
+
+	rn = &routeNode{
+		methodHandlerSet: &methodHandlerSet{},
+	}
+
+	rn.addHandler("", h)
+	if rn.catchAllHandler == nil {
+		t.Fatal("unexpected nil")
+	}
+}
+
+func TestRouteNodeHandler(t *testing.T) {
+	h := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+	})
+
+	rn := &routeNode{
+		methodHandlerSet: &methodHandlerSet{
+			get:     h,
+			head:    h,
+			post:    h,
+			put:     h,
+			patch:   h,
+			delete:  h,
+			connect: h,
+			options: h,
+			trace:   h,
+		},
+	}
+
+	if rn.handler(http.MethodGet) == nil {
+		t.Fatal("unexpected nil")
+	} else if rn.handler(http.MethodHead) == nil {
+		t.Fatal("unexpected nil")
+	} else if rn.handler(http.MethodPost) == nil {
+		t.Fatal("unexpected nil")
+	} else if rn.handler(http.MethodPut) == nil {
+		t.Fatal("unexpected nil")
+	} else if rn.handler(http.MethodPatch) == nil {
+		t.Fatal("unexpected nil")
+	} else if rn.handler(http.MethodDelete) == nil {
+		t.Fatal("unexpected nil")
+	} else if rn.handler(http.MethodConnect) == nil {
+		t.Fatal("unexpected nil")
+	} else if rn.handler(http.MethodOptions) == nil {
+		t.Fatal("unexpected nil")
+	} else if rn.handler(http.MethodTrace) == nil {
+		t.Fatal("unexpected nil")
+	}
+
+	rn = &routeNode{
+		methodHandlerSet: &methodHandlerSet{},
+		unknownMethodHandlers: []*unknownMethodHandler{{
+			method:  "foobar",
+			handler: h,
 		}},
+		catchAllHandler: h,
 	}
 
-	if crn := rn.tChild(paramRouteNode); crn != nil {
-		t.Errorf("got %v, want nil", crn)
-	}
-
-	if crn := rn.tChild(staticRouteNode); crn == nil {
+	if rn.handler("foobar") == nil {
+		t.Fatal("unexpected nil")
+	} else if rn.handler("barfoo") == nil {
 		t.Fatal("unexpected nil")
 	}
 }
