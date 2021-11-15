@@ -3,101 +3,48 @@ Package r2 implements a minimalist HTTP request routing helper for Go.
 */
 package r2
 
-import (
-	"net/http"
-	"net/url"
-	"strings"
-)
+import "net/http"
 
 // contextKey is the context key.
 type contextKey uint8
 
 // The context keys.
 const (
-	matchDataContextKey contextKey = iota
+	pathParamsContextKey contextKey = iota
 )
 
-// PathParams returns parsed path parameters of the `req`.
-//
-// Note that the returned `url.Values` is always non-nil.
-func PathParams(req *http.Request) url.Values {
-	md, ok := req.Context().Value(matchDataContextKey).(*matchData)
+// PathParam returns a path parameter value of the `req` for the `name`.
+func PathParam(req *http.Request, name string) string {
+	pps, ok := req.Context().Value(pathParamsContextKey).(*pathParams)
 	if !ok {
-		return url.Values{}
+		return ""
 	}
 
-	if md.pathParams != nil {
-		return md.pathParams
+	for i, ppn := range pps.names {
+		if ppn == name {
+			return pps.values[i]
+		}
 	}
 
-	ppsl := len(md.pathParamSlots)
-	pps := make(url.Values, ppsl)
-	maxPPS := md.pathParamSlots[ppsl-1].number
-	for i, l, slot, ppsi := 0, len(md.path), 0, 0; i < l; i++ {
-		if md.path[i] == '/' {
-			i++
-			for ; i < l && md.path[i] == '/'; i++ {
-			}
-
-			slot++
-			if slot > maxPPS {
-				break
-			}
-		}
-
-		if slot < md.pathParamSlots[ppsi].number {
-			j := strings.IndexByte(md.path[i:], '/')
-			if j < 0 { // This should never happen
-				break
-			}
-
-			i += j - 1
-
-			continue
-		}
-
-		i += md.pathParamSlots[ppsi].offset
-
-		if md.pathParamSlots[ppsi].name == "*" {
-			addPathParam(pps, "*", md.path[i:])
-			break
-		}
-
-		j := strings.IndexByte(md.path[i:], '/')
-		if j < 0 {
-			addPathParam(
-				pps,
-				md.pathParamSlots[ppsi].name,
-				md.path[i:],
-			)
-			break
-		}
-
-		addPathParam(pps, md.pathParamSlots[ppsi].name, md.path[i:i+j])
-
-		ppsi++
-		if ppsi >= ppsl {
-			break
-		}
-
-		i += j - 1
-	}
-
-	md.pathParams = pps
-
-	return pps
+	return ""
 }
 
-// addPathParam adds the `name` and `rawValue` as a path parameter to the `vs`.
-func addPathParam(vs url.Values, name, rawValue string) {
-	value, err := url.PathUnescape(rawValue)
-	if err != nil {
-		value = rawValue
+// PathParamNames returns path parameter names of the `req`.
+func PathParamNames(req *http.Request) []string {
+	pps, ok := req.Context().Value(pathParamsContextKey).(*pathParams)
+	if !ok {
+		return nil
 	}
 
-	if len(vs[name]) == 0 {
-		vs[name] = []string{value}
-	} else {
-		vs.Add(name, value)
+	return pps.names
+}
+
+// PathParamValues returns path parameter values of the `req`.
+func PathParamValues(req *http.Request) []string {
+	pps, ok := req.Context().Value(pathParamsContextKey).(*pathParams)
+	if !ok {
+		return nil
 	}
+
+	return pps.values[:len(pps.names)]
 }

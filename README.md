@@ -14,13 +14,13 @@ wraps [net/http](https://pkg.go.dev/net/http).
 ## Features
 
 * Extremely easy to use
-* Router
-	* Blazing fast
-	* Based on [radix tree](https://en.wikipedia.org/wiki/Radix_tree)
-	* Sub-router support
-	* Path parameter support
-	* Path auto-correction support
-* Middleware
+* Blazing fast
+* Based on [radix tree](https://en.wikipedia.org/wiki/Radix_tree)
+* Sub-router support
+* Path parameter support
+* Path auto-correction support
+* No [`http.Handler`](https://pkg.go.dev/net/http#Handler) variant
+* Middleware support
 * Zero third-party dependencies
 * 100% code coverage
 
@@ -57,7 +57,7 @@ func main() {
 }
 
 func hello(rw http.ResponseWriter, req *http.Request) {
-	fmt.Fprintf(rw, "Hello, %s\n", r2.PathParams(req).Get("name"))
+	fmt.Fprintf(rw, "Hello, %s\n", r2.PathParam(req, "name"))
 }
 ```
 

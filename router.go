@@ -3,9 +3,9 @@ package r2
 import (
 	"context"
 	"net/http"
-	"net/url"
-	ppath "path"
+	stdpath "path"
 	"strings"
+	"sync"
 )
 
 // Router is the registry of all registered routes for request matching.
@@ -43,9 +43,11 @@ type Router struct {
 	// nil.
 	TSRHandler http.Handler
 
-	routeTree         *routeNode
-	registeredRoutes  map[string]bool
-	overridableRoutes map[string]bool
+	routeTree           *routeNode
+	registeredRoutes    map[string]bool
+	overridableRoutes   map[string]bool
+	maxPathParams       int
+	pathParamValuesPool sync.Pool
 }
 
 // Sub returns a new instance of the `Router` inherited from the `r` with the
@@ -64,8 +66,8 @@ func (r *Router) Sub(pathPrefix string, ms ...Middleware) *Router {
 // Note that a ':' followed by a name in the `path` declares a path parameter
 // that matches all characters except '/'. And an '*' in the `path` declares a
 // wildcard path parameter that greedily matches all characters, with "*" as its
-// name. The `PathParams` can be used to get those declared path parameters
-// after a request is matched.
+// name. The `PathParam` can be used to get those declared path parameters after
+// a request is matched.
 func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 	if r.Parent != nil {
 		r.Parent.Handle(
@@ -92,7 +94,7 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 	}
 
 	hasTrailingSlash := path[len(path)-1] == '/'
-	path = ppath.Clean(path)
+	path = stdpath.Clean(path)
 	if hasTrailingSlash && path != "/" {
 		path += "/"
 	}
@@ -159,13 +161,14 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 		}
 
 		h.ServeHTTP(rw, req)
+		if i := req.Context().Value(pathParamsContextKey); i != nil {
+			r.pathParamValuesPool.Put(i.(*pathParams).values)
+		}
 	})
 
-	var pathParamSlots []*pathParamSlot
-	for i, l, slot := 0, len(path), 0; i < l; i++ {
+	var pathParamNames []string
+	for i, l := 0, len(path); i < l; i++ {
 		switch path[i] {
-		case '/':
-			slot++
 		case ':':
 			r.insertRoute(
 				method,
@@ -175,40 +178,30 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 				nil,
 			)
 
-			offset := i - strings.LastIndexByte(path[:i], '/') - 1
-
 			j := i + 1
 			for ; i < l && path[i] != '/'; i++ {
 			}
 
-			pathParamSlots = append(pathParamSlots, &pathParamSlot{
-				number: slot,
-				name:   path[j:i],
-				offset: offset,
-			})
-
+			pathParamNames = append(pathParamNames, path[j:i])
 			path = path[:j] + path[i:]
 
 			if i, l = j, len(path); i == l {
 				r.insertRoute(
 					method,
-					path,
+					path[:i],
 					rh,
 					paramRouteNode,
-					pathParamSlots,
+					pathParamNames,
 				)
-				return
+			} else {
+				r.insertRoute(
+					method,
+					path[:i],
+					nil,
+					paramRouteNode,
+					pathParamNames,
+				)
 			}
-
-			r.insertRoute(
-				method,
-				path[:i],
-				nil,
-				paramRouteNode,
-				pathParamSlots,
-			)
-
-			slot++
 		case '*':
 			r.insertRoute(
 				method,
@@ -236,25 +229,19 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 				}
 			}
 
-			pathParamSlots = append(pathParamSlots, &pathParamSlot{
-				number: slot,
-				name:   "*",
-				offset: offset,
-			})
+			pathParamNames = append(pathParamNames, "*")
 
 			r.insertRoute(
 				method,
 				path[:i+1],
 				rh,
 				wildcardParamRouteNode,
-				pathParamSlots,
+				pathParamNames,
 			)
-
-			return
 		}
 	}
 
-	r.insertRoute(method, path, rh, staticRouteNode, pathParamSlots)
+	r.insertRoute(method, path, rh, staticRouteNode, pathParamNames)
 }
 
 // insertRoute inserts a new route into the `r.routeTree`.
@@ -263,16 +250,25 @@ func (r *Router) insertRoute(
 	path string,
 	h http.Handler,
 	nt routeNodeType,
-	pathParamSlots []*pathParamSlot,
+	pathParamNames []string,
 ) {
+	if l := len(pathParamNames); r.maxPathParams < l {
+		r.maxPathParams = l
+		r.pathParamValuesPool = sync.Pool{
+			New: func() interface{} {
+				return make([]string, l)
+			},
+		}
+	}
+
 	var (
 		s  = path        // Search
-		cn = r.routeTree // Current node
-		nn *routeNode    // Next node
 		sl int           // Search length
 		pl int           // Prefix length
 		ll int           // LCP length
 		ml int           // Minimum length of the `sl` and `pl`
+		cn = r.routeTree // Current node
+		nn *routeNode    // Next node
 	)
 
 	for {
@@ -289,9 +285,9 @@ func (r *Router) insertRoute(
 		if ll == 0 { // At root node
 			cn.prefix = s
 			cn.label = s[0]
-			cn.typ = nt
-			cn.pathParamSlots = pathParamSlots
 			if h != nil {
+				cn.typ = nt
+				cn.pathParamNames = pathParamNames
 				cn.addHandler(method, h)
 			}
 		} else if ll < pl { // Split node
@@ -299,14 +295,28 @@ func (r *Router) insertRoute(
 				prefix:                cn.prefix[ll:],
 				label:                 cn.prefix[ll],
 				typ:                   cn.typ,
+				parent:                cn,
 				staticChildren:        cn.staticChildren,
 				paramChild:            cn.paramChild,
 				wildcardParamChild:    cn.wildcardParamChild,
-				pathParamSlots:        cn.pathParamSlots,
+				hasAtLeastOneChild:    cn.hasAtLeastOneChild,
+				pathParamNames:        cn.pathParamNames,
 				methodHandlerSet:      cn.methodHandlerSet,
 				unknownMethodHandlers: cn.unknownMethodHandlers,
 				catchAllHandler:       cn.catchAllHandler,
 				hasAtLeastOneHandler:  cn.hasAtLeastOneHandler,
+			}
+
+			for _, n := range nn.staticChildren {
+				n.parent = nn
+			}
+
+			if nn.paramChild != nil {
+				nn.paramChild.parent = nn
+			}
+
+			if nn.wildcardParamChild != nil {
+				nn.wildcardParamChild.parent = nn
 			}
 
 			// Reset current node.
@@ -316,32 +326,29 @@ func (r *Router) insertRoute(
 			cn.staticChildren = nil
 			cn.paramChild = nil
 			cn.wildcardParamChild = nil
-			cn.pathParamSlots = nil
+			cn.hasAtLeastOneChild = false
+			cn.pathParamNames = nil
 			cn.methodHandlerSet = &methodHandlerSet{}
 			cn.unknownMethodHandlers = nil
 			cn.catchAllHandler = nil
 			cn.hasAtLeastOneHandler = false
-
 			cn.addChild(nn)
 
 			if ll == sl { // At current node
 				cn.typ = nt
-				cn.pathParamSlots = pathParamSlots
-				if h != nil {
-					cn.addHandler(method, h)
-				}
+				cn.pathParamNames = pathParamNames
+				cn.addHandler(method, h)
 			} else { // Create child node
 				nn = &routeNode{
 					prefix:           s[ll:],
 					label:            s[ll],
 					typ:              nt,
-					pathParamSlots:   pathParamSlots,
+					parent:           cn,
+					pathParamNames:   pathParamNames,
 					methodHandlerSet: &methodHandlerSet{},
 				}
 
-				if h != nil {
-					nn.addHandler(method, h)
-				}
+				nn.addHandler(method, h)
 
 				cn.addChild(nn)
 			}
@@ -358,18 +365,17 @@ func (r *Router) insertRoute(
 				prefix:           s,
 				label:            s[0],
 				typ:              nt,
-				pathParamSlots:   pathParamSlots,
+				parent:           cn,
+				pathParamNames:   pathParamNames,
 				methodHandlerSet: &methodHandlerSet{},
 			}
 
-			if h != nil {
-				nn.addHandler(method, h)
-			}
+			nn.addHandler(method, h)
 
 			cn.addChild(nn)
 		} else if h != nil { // Node already exists
-			if len(cn.pathParamSlots) == 0 {
-				cn.pathParamSlots = pathParamSlots
+			if len(cn.pathParamNames) == 0 {
+				cn.pathParamNames = pathParamNames
 			}
 
 			cn.addHandler(method, h)
@@ -396,43 +402,27 @@ func (r *Router) Handler(req *http.Request) (http.Handler, *http.Request) {
 	}
 
 	var (
-		s     = path        // Search
-		cn    = r.routeTree // Current node
-		nn    *routeNode    // Next node
-		sn    *routeNode    // Saved node
-		snt   routeNodeType // Saved node type
-		ss    string        // Saved search
-		swppn *routeNode    // Saved wildcard param parent node
-		swpps string        // Saved wildcard param parent search
-		sl    int           // Search length
-		pl    int           // Prefix length
-		ll    int           // LCP length
-		ml    int           // Minimum length of the `sl` and `pl`
-		i     int           // Index
+		s    = path        // Search
+		si   int           // Search index
+		sl   int           // Search length
+		pl   int           // Prefix length
+		ll   int           // LCP length
+		ml   int           // Minimum length of the `sl` and `pl`
+		cn   = r.routeTree // Current node
+		nn   *routeNode    // Next node
+		nnt  routeNodeType // Next node type
+		sn   *routeNode    // Saved node
+		snt  routeNodeType // Saved node type
+		ppi  int           // Path parameter index
+		ppvs []string      // Path parameter values
+		i    int           // Index
+		mh   http.Handler  // Matched `http.Handler`
 	)
 
-	// Node search order: static > param > wildcard param.
+	// Node search order: static > parameter > wildcard parameter.
 	for {
-		if s == "" {
-			if !cn.hasAtLeastOneHandler {
-				if cn.paramChild != nil {
-					goto TryParamNode
-				}
-
-				if cn.wildcardParamChild != nil {
-					goto TryWildcardParamNode
-				}
-
-				if swppn != nil {
-					goto Struggle
-				}
-			}
-
-			break
-		}
-
-		// Skip continuous "/".
-		if s[0] == '/' {
+		// Skip continuous '/'.
+		if s != "" && s[0] == '/' {
 			for i, sl = 1, len(s); i < sl && s[i] == '/'; i++ {
 			}
 
@@ -440,7 +430,7 @@ func (r *Router) Handler(req *http.Request) (http.Handler, *http.Request) {
 		}
 
 		pl, ll = 0, 0
-		if cn.label != ':' {
+		if cn.typ == staticRouteNode {
 			sl, pl = len(s), len(cn.prefix)
 			if sl < pl {
 				ml = sl
@@ -450,108 +440,144 @@ func (r *Router) Handler(req *http.Request) (http.Handler, *http.Request) {
 
 			for ; ll < ml && s[ll] == cn.prefix[ll]; ll++ {
 			}
+
+			if ll != pl {
+				snt = staticRouteNode
+				goto StruggleForTheFormerNode
+			}
+
+			s = s[ll:]
+			si += ll
 		}
 
-		if ll != pl {
-			goto Struggle
-		}
+		if s == "" && cn.hasAtLeastOneHandler {
+			if sn == nil {
+				sn = cn
+			}
 
-		s = s[ll:]
-		if s == "" {
-			continue
-		}
-
-		// Save wildcard param parent node for struggling.
-		if cn != swppn && cn.wildcardParamChild != nil {
-			swppn = cn
-			swpps = s
+			if h := cn.handler(req.Method); h != nil {
+				mh = h
+				break
+			}
 		}
 
 		// Try static node.
-		if nn = cn.staticChildByLabel(s[0]); nn != nil {
-			// Save node for struggling.
-			pl = len(cn.prefix)
-			if pl > 0 && cn.prefix[pl-1] == '/' {
-				sn = cn
-				snt = paramRouteNode
-				ss = s
+		if s != "" {
+			if nn = cn.staticChildByLabel(s[0]); nn != nil {
+				cn = nn
+				continue
 			}
-
-			cn = nn
-
-			continue
 		}
 
-		// Try param node.
+		// Try parameter node.
 	TryParamNode:
-		if nn = cn.paramChild; nn != nil {
-			// Save node for struggling.
-			pl = len(cn.prefix)
-			if pl > 0 && cn.prefix[pl-1] == '/' {
-				sn = cn
-				snt = wildcardParamRouteNode
-				ss = s
-			}
-
-			cn = nn
+		if cn.paramChild != nil {
+			cn = cn.paramChild
 
 			for i, sl = 0, len(s); i < sl && s[i] != '/'; i++ {
 			}
 
+			if ppvs == nil {
+				ppvs = r.pathParamValuesPool.Get().([]string)
+			}
+
+			ppvs[ppi] = s[:i]
+			ppi++
+
 			s = s[i:]
+			si += i
 
 			continue
 		}
 
-		// Try wildcard param node.
+		// Try wildcard parameter node.
 	TryWildcardParamNode:
-		if cn = cn.wildcardParamChild; cn != nil {
-			break
+		if cn.wildcardParamChild != nil {
+			cn = cn.wildcardParamChild
+
+			if ppvs == nil {
+				ppvs = r.pathParamValuesPool.Get().([]string)
+			}
+
+			ppvs[ppi] = s
+			ppi++
+
+			si += len(s)
+			s = ""
+
+			if sn == nil {
+				sn = cn
+			}
+
+			if h := cn.handler(req.Method); h != nil {
+				mh = h
+				break
+			}
 		}
 
+		snt = wildcardParamRouteNode
+
 		// Struggle for the former node.
-	Struggle:
-		if sn != nil {
-			cn = sn
-			sn = nil
-			s = ss
-			switch snt {
+	StruggleForTheFormerNode:
+		nn = cn
+		if nn.typ < wildcardParamRouteNode {
+			nnt = nn.typ + 1
+		} else {
+			nnt = staticRouteNode
+		}
+
+		if snt != staticRouteNode {
+			if nn.typ == staticRouteNode {
+				si -= len(nn.prefix)
+			} else {
+				ppi--
+				si -= len(ppvs[ppi])
+			}
+
+			s = path[si:]
+		}
+
+		if cn = cn.parent; cn != nil {
+			switch nnt {
 			case paramRouteNode:
 				goto TryParamNode
 			case wildcardParamRouteNode:
 				goto TryWildcardParamNode
 			}
-		} else if swppn != nil {
-			cn = swppn
-			swppn = nil
-			s = swpps
-			goto TryWildcardParamNode
+		} else if snt == staticRouteNode {
+			sn = nil
+		}
+
+		break
+	}
+
+	if cn == nil || mh == nil {
+		if ppvs != nil {
+			r.pathParamValuesPool.Put(ppvs)
+		}
+
+		if sn != nil {
+			cn = sn
+			if cn.hasAtLeastOneHandler {
+				return r.methodNotAllowedHandler(), req
+			}
 		}
 
 		return r.notFoundHandler(), req
 	}
 
-	h := cn.handler(req.Method)
-	if h == nil {
-		if cn.hasAtLeastOneHandler {
-			return r.methodNotAllowedHandler(), req
-		}
-
-		return r.notFoundHandler(), req
-	}
-
-	if len(cn.pathParamSlots) > 0 {
-		return h, req.WithContext(context.WithValue(
+	if len(cn.pathParamNames) > 0 {
+		return mh, req.WithContext(context.WithValue(
 			req.Context(),
-			matchDataContextKey,
-			&matchData{
-				path:           path,
-				pathParamSlots: cn.pathParamSlots,
+			pathParamsContextKey,
+			&pathParams{
+				names:  cn.pathParamNames,
+				values: ppvs,
 			},
 		))
 	}
 
-	return h, req
+	return mh, req
 }
 
 // ServeHTTP implements the `http.Handler`.
@@ -636,10 +662,12 @@ type routeNode struct {
 	prefix                string
 	label                 byte
 	typ                   routeNodeType
+	parent                *routeNode
 	staticChildren        []*routeNode
 	paramChild            *routeNode
 	wildcardParamChild    *routeNode
-	pathParamSlots        []*pathParamSlot
+	hasAtLeastOneChild    bool
+	pathParamNames        []string
 	methodHandlerSet      *methodHandlerSet
 	unknownMethodHandlers []*unknownMethodHandler
 	catchAllHandler       http.Handler
@@ -648,6 +676,7 @@ type routeNode struct {
 
 // addChild adds the `n` as a child node to the `rn`.
 func (rn *routeNode) addChild(n *routeNode) {
+	rn.hasAtLeastOneChild = true
 	switch n.typ {
 	case staticRouteNode:
 		rn.staticChildren = append(rn.staticChildren, n)
@@ -772,13 +801,6 @@ const (
 	wildcardParamRouteNode
 )
 
-// pathParamSlot is the path parameter slot.
-type pathParamSlot struct {
-	number int
-	name   string
-	offset int
-}
-
 // methodHandlerSet is a set of `http.Handler`s for the well-known HTTP methods.
 type methodHandlerSet struct {
 	get     http.Handler
@@ -798,9 +820,8 @@ type unknownMethodHandler struct {
 	handler http.Handler
 }
 
-// matchData is the data generated in the process of request matching.
-type matchData struct {
-	path           string
-	pathParamSlots []*pathParamSlot
-	pathParams     url.Values
+// pathParams is the path parameters.
+type pathParams struct {
+	names  []string
+	values []string
 }
