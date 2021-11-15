@@ -182,7 +182,15 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 			for ; i < l && path[i] != '/'; i++ {
 			}
 
-			pathParamNames = append(pathParamNames, path[j:i])
+			pathParamName := path[j:i]
+			for _, pn := range pathParamNames {
+				if pn == pathParamName {
+					panic("r2: route path cannot have " +
+						"duplicate parameter names")
+				}
+			}
+
+			pathParamNames = append(pathParamNames, pathParamName)
 			path = path[:j] + path[i:]
 
 			if i, l = j, len(path); i == l {

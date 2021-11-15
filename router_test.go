@@ -150,6 +150,17 @@ func TestRouterHandle(t *testing.T) {
 		}()
 
 		r = &Router{}
+		r.Handle("", "/foo/:bar/:bar", http.NotFoundHandler())
+	}()
+
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatal("expected panic")
+			}
+		}()
+
+		r = &Router{}
 		r.Handle("", "/", nil)
 	}()
 }
