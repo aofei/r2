@@ -21,7 +21,7 @@ R2 is built for people who:
 ## Features
 
 * Extremely easy to use
-* Blazing fast
+* Blazing fast (see [benchmarks](https://github.com/aofei/go-http-request-routing-benchmark#readme))
 * Based on [radix tree](https://en.wikipedia.org/wiki/Radix_tree)
 * Sub-router support
 * Path parameter support
