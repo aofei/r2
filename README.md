@@ -11,6 +11,13 @@ The name "R2" stands for "Request Routing". That's all, R2 is just a capable
 little helper for HTTP request routing, not another fancy web framework that
 wraps [net/http](https://pkg.go.dev/net/http).
 
+R2 is built for people who:
+
+* Think [net/http](https://pkg.go.dev/net/http) is powerful enough and easy to use.
+* Don't want to use any web framework that wraps [net/http](https://pkg.go.dev/net/http).
+* Don't want to use any variant of [`http.Handler`](https://pkg.go.dev/net/http#Handler).
+* Want [`http.ServeMux`](https://pkg.go.dev/net/http#ServeMux) to have better performance and support path parameters.
+
 ## Features
 
 * Extremely easy to use
