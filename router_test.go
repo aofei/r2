@@ -1913,6 +1913,34 @@ func TestRouterHandler_misc(t *testing.T) {
 
 	for _, route := range routes {
 		routeName := fmt.Sprintf("%s %s", route.method, route.path)
+		routePathParams := &pathParams{}
+		for i, l := 0, len(route.path); i < l; i++ {
+			switch route.path[i] {
+			case ':':
+				j := i + 1
+				for ; i < l && route.path[i] != '/'; i++ {
+				}
+
+				routePathParams.names = append(
+					routePathParams.names,
+					route.path[j:i],
+				)
+				routePathParams.values = append(
+					routePathParams.values,
+					route.path[j-1:i],
+				)
+			case '*':
+				routePathParams.names = append(
+					routePathParams.names,
+					"*",
+				)
+				routePathParams.values = append(
+					routePathParams.values,
+					"*",
+				)
+			}
+		}
+
 		req := httptest.NewRequest(route.method, route.path, nil)
 		rec := httptest.NewRecorder()
 		mh, req := r.Handler(req)
@@ -1924,6 +1952,32 @@ func TestRouterHandler_misc(t *testing.T) {
 			t.Fatalf("unexpected error %q", err)
 		} else if string(b) != routeName {
 			t.Errorf("got %q, want %q", b, want)
+		} else if l := len(routePathParams.names); l > 0 {
+			ppns := PathParamNames(req)
+			if ppns == nil {
+				t.Fatal("unexpected nil")
+			} else if got := len(ppns); got != l {
+				t.Errorf("got %d, want %d", got, l)
+			}
+
+			for i, ppn := range ppns {
+				want := routePathParams.names[i]
+				if ppn != want {
+					t.Errorf("got %q, want %q", ppn, want)
+				}
+			}
+		} else if l := len(routePathParams.values); l > 0 {
+			ppvs := PathParamValues(req)
+			if ppvs == nil {
+				t.Fatal("unexpected nil")
+			}
+
+			for i, ppv := range ppvs {
+				want := routePathParams.values[i]
+				if ppv != want {
+					t.Errorf("got %q, want %q", ppv, want)
+				}
+			}
 		}
 	}
 }
