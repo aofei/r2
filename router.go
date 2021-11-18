@@ -8,7 +8,10 @@ import (
 	"sync"
 )
 
-// Router is the registry of all registered routes for request matching.
+// Router is a registry of all registered routes for HTTP request routing.
+//
+// Make sure that all the fields of the `Router` have been finalized before
+// calling the `Router.Handle`.
 type Router struct {
 	// Parent is the parent `Router`.
 	Parent *Router
@@ -19,7 +22,8 @@ type Router struct {
 	// Middlewares is the `Middleware` chain that performs after routing.
 	Middlewares []Middleware
 
-	// NotFoundHandler writes 404 not found responses.
+	// NotFoundHandler writes not found responses. It is used when the
+	// `Handler` fails to find a matching handler for a request.
 	//
 	// If the `NotFoundHandler` is nil, a default one is used.
 	//
@@ -27,7 +31,9 @@ type Router struct {
 	// not nil.
 	NotFoundHandler http.Handler
 
-	// MethodNotAllowedHandler writes 405 method not allowed responses.
+	// MethodNotAllowedHandler writes method not allowed responses. It is
+	// used when the `Handler` finds a handler that matches only the path
+	// but not the method for a request.
 	//
 	// If the `MethodNotAllowedHandler` is nil, a default one is used.
 	//
@@ -35,7 +41,10 @@ type Router struct {
 	// `Parent` is not nil.
 	MethodNotAllowedHandler http.Handler
 
-	// TSRHandler writes TSR (trailing slash redirect) responses.
+	// TSRHandler writes TSR (Trailing Slash Redirect) responses. It may be
+	// used when the path of a registered route ends with "/*", and the
+	// `Handler` fails to find a matching handler for a request whose path
+	// does not end with such pattern.
 	//
 	// If the `TSRHandler` is nil, a default one is used.
 	//
@@ -43,11 +52,12 @@ type Router struct {
 	// nil.
 	TSRHandler http.Handler
 
-	routeTree           *routeNode
-	registeredRoutes    map[string]bool
-	overridableRoutes   map[string]bool
-	maxPathParams       int
-	pathParamValuesPool sync.Pool
+	routeTree                      *routeNode
+	registeredRoutes               map[string]bool
+	maxPathParams                  int
+	pathParamValuesPool            sync.Pool
+	chainedNotFoundHandler         http.Handler
+	chainedMethodNotAllowedHandler http.Handler
 }
 
 // Sub returns a new instance of the `Router` inherited from the `r` with the
@@ -63,11 +73,18 @@ func (r *Router) Sub(pathPrefix string, ms ...Middleware) *Router {
 // Handle registers a new route for the `method` ("" means catch-all) and `path`
 // with the matching `h` and optional `ms`.
 //
-// Note that a ':' followed by a name in the `path` declares a path parameter
-// that matches all characters except '/'. And an '*' in the `path` declares a
-// wildcard path parameter that greedily matches all characters, with "*" as its
-// name. The `PathParam` can be used to get those declared path parameters after
-// a request is matched.
+// A ':' followed by a name in the `path` declares a path parameter that matches
+// all characters except '/'. And an '*' in the `path` declares a wildcard path
+// parameter that greedily matches all characters, with "*" as its name. The
+// `PathParam` can be used to get those declared path parameters after a request
+// is matched.
+//
+// When the `path` ends with "/*", and there is at least one path element before
+// it without any other path parameters, a sepcial catch-all route will be
+// automatically registered with the result of `path[:len(path)-2]` as its path
+// and the `r.TSRHandler` as its handler. This special catch-all route will be
+// overridden if a route with such path is explicitly registered, regardless of
+// its method.
 func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 	if r.Parent != nil {
 		r.Parent.Handle(
@@ -85,12 +102,21 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 		}
 
 		r.registeredRoutes = map[string]bool{}
-		r.overridableRoutes = map[string]bool{}
+	}
+
+	for _, c := range method {
+		if (c < '0' || c > '9') &&
+			(c < 'A' || c > 'Z') &&
+			(c < 'a' || c > 'z') {
+			panic("r2: route method must be alphanumeric")
+		}
 	}
 
 	path = r.PathPrefix + path
 	if path == "" {
 		panic("r2: route path cannot be empty")
+	} else if path[0] != '/' {
+		panic("r2: route path must start with '/'")
 	}
 
 	hasTrailingSlash := path[len(path)-1] == '/'
@@ -99,16 +125,20 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 		path += "/"
 	}
 
-	if path[0] != '/' {
-		panic("r2: route path must start with '/'")
-	} else if strings.Count(path, ":") > 1 {
+	var hasAtLeastOnePathParam bool
+	if strings.Contains(path, ":") {
+		hasAtLeastOnePathParam = true
 		for _, p := range strings.Split(path, "/") {
 			if strings.Count(p, ":") > 1 {
 				panic("r2: only one ':' is allowed in a " +
 					"route path element")
 			}
 		}
-	} else if strings.Contains(path, "*") {
+	}
+
+	if strings.Contains(path, "*") {
+		hasAtLeastOnePathParam = true
+
 		if strings.Count(path, "*") > 1 {
 			panic("r2: only one '*' is allowed in a route path")
 		}
@@ -133,18 +163,12 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 
 			routeName = routeName[:j] + routeName[i:]
 
-			if i, l = j, len(routeName); i == l {
-				break
-			}
+			i, l = j, len(routeName)
 		}
 	}
 
 	if r.registeredRoutes[routeName] {
-		if !r.overridableRoutes[routeName] {
-			panic("r2: route already exists")
-		}
-
-		delete(r.overridableRoutes, routeName)
+		panic("r2: route already exists")
 	} else {
 		r.registeredRoutes[routeName] = true
 	}
@@ -153,18 +177,26 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 		panic("r2: route handler cannot be nil")
 	}
 
-	rms := append(r.Middlewares, ms...)
-	rh := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		h := h
-		for i := len(rms) - 1; i >= 0; i-- {
-			h = rms[i].ChainHTTPHandler(h)
+	if ms := append(r.Middlewares, ms...); len(ms) > 0 {
+		for i := len(ms) - 1; i >= 0; i-- {
+			if ms[i] != nil {
+				h = ms[i].ChainHTTPHandler(h)
+			}
 		}
+	}
 
-		h.ServeHTTP(rw, req)
-		if i := req.Context().Value(pathParamsContextKey); i != nil {
-			r.pathParamValuesPool.Put(i.(*pathParams).values)
-		}
-	})
+	if hasAtLeastOnePathParam {
+		ph := h
+		h = http.HandlerFunc(func(
+			rw http.ResponseWriter,
+			req *http.Request,
+		) {
+			ph.ServeHTTP(rw, req)
+			pps := req.Context().
+				Value(pathParamsContextKey).(*pathParams)
+			r.pathParamValuesPool.Put(pps.values)
+		})
+	}
 
 	var pathParamNames []string
 	for i, l := 0, len(path); i < l; i++ {
@@ -183,6 +215,11 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 			}
 
 			pathParamName := path[j:i]
+			if pathParamName == "" {
+				panic("r2: route path parameter name cannot " +
+					"be empty")
+			}
+
 			for _, pn := range pathParamNames {
 				if pn == pathParamName {
 					panic("r2: route path cannot have " +
@@ -193,11 +230,12 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 			pathParamNames = append(pathParamNames, pathParamName)
 			path = path[:j] + path[i:]
 
-			if i, l = j, len(path); i == l {
+			i, l = j, len(path)
+			if i < l {
 				r.insertRoute(
 					method,
 					path[:i],
-					rh,
+					nil,
 					paramRouteNode,
 					pathParamNames,
 				)
@@ -205,7 +243,7 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 				r.insertRoute(
 					method,
 					path[:i],
-					nil,
+					h,
 					paramRouteNode,
 					pathParamNames,
 				)
@@ -220,13 +258,11 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 			)
 
 			offset := i - strings.LastIndexByte(path[:i], '/') - 1
-			if offset == 0 && i > 1 {
-				method := ""
-				path := path[:i-1]
+			if offset == 0 && i > 1 && len(pathParamNames) == 0 {
+				method, path := "_tsr", path[:i-1]
 				routeName := method + path
 				if !r.registeredRoutes[routeName] {
 					r.registeredRoutes[routeName] = true
-					r.overridableRoutes[routeName] = true
 					r.insertRoute(
 						method,
 						path,
@@ -242,14 +278,22 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 			r.insertRoute(
 				method,
 				path[:i+1],
-				rh,
+				h,
 				wildcardParamRouteNode,
 				pathParamNames,
 			)
 		}
 	}
 
-	r.insertRoute(method, path, rh, staticRouteNode, pathParamNames)
+	r.insertRoute(method, path, h, staticRouteNode, pathParamNames)
+
+	// Rechain the `r.NotFoundHandler`.
+	r.chainedNotFoundHandler = nil
+	r.notFoundHandler()
+
+	// Rechain the `r.MethodNotAllowedHandler`.
+	r.chainedMethodNotAllowedHandler = nil
+	r.methodNotAllowedHandler()
 }
 
 // insertRoute inserts a new route into the `r.routeTree`.
@@ -362,7 +406,9 @@ func (r *Router) insertRoute(
 			}
 		} else if ll < sl {
 			s = s[ll:]
-			switch nn = nil; s[0] {
+
+			nn = nil
+			switch s[0] {
 			case ':':
 				nn = cn.paramChild
 			case '*':
@@ -441,7 +487,7 @@ func (r *Router) Handler(req *http.Request) (http.Handler, *http.Request) {
 		ppi  int           // Path parameter index
 		ppvs []string      // Path parameter values
 		i    int           // Index
-		mh   http.Handler  // Matched `http.Handler`
+		h    http.Handler  // Handler
 	)
 
 	// Node search order: static > parameter > wildcard parameter.
@@ -449,13 +495,13 @@ OuterLoop:
 	for {
 		// Skip continuous '/'.
 		if s != "" && s[0] == '/' {
-			for i, sl = 1, len(s); i < sl && s[i] == '/'; i++ {
+			i, sl = 1, len(s)
+			for ; i < sl && s[i] == '/'; i++ {
 			}
 
 			s = s[i-1:]
 		}
 
-		pl, ll = 0, 0
 		if cn.typ == staticRouteNode {
 			sl, pl = len(s), len(cn.prefix)
 			if sl < pl {
@@ -464,6 +510,7 @@ OuterLoop:
 				ml = pl
 			}
 
+			ll = 0
 			for ; ll < ml && s[ll] == cn.prefix[ll]; ll++ {
 			}
 
@@ -481,7 +528,6 @@ OuterLoop:
 				sn = cn
 			}
 
-			var h http.Handler
 			switch req.Method {
 			case http.MethodGet:
 				h = cn.methodHandlerSet.get
@@ -503,19 +549,18 @@ OuterLoop:
 				h = cn.methodHandlerSet.trace
 			default:
 				for _, omh := range cn.otherMethodHandlers {
-					if req.Method == omh.method {
-						mh = omh.handler
+					if omh.method == req.Method {
+						h = omh.handler
 						break OuterLoop
 					}
 				}
 			}
 
-			if h == nil {
-				h = cn.catchAllHandler
+			if h == nil && cn.catchAllHandler != nil {
+				h = cn.catchAllHandler.handler
 			}
 
 			if h != nil {
-				mh = h
 				break
 			}
 		}
@@ -535,7 +580,8 @@ OuterLoop:
 		if cn.paramChild != nil {
 			cn = cn.paramChild
 
-			for i, sl = 0, len(s); i < sl && s[i] != '/'; i++ {
+			i, sl = 0, len(s)
+			for ; i < sl && s[i] != '/'; i++ {
 			}
 
 			if ppvs == nil {
@@ -570,7 +616,6 @@ OuterLoop:
 				sn = cn
 			}
 
-			var h http.Handler
 			switch req.Method {
 			case http.MethodGet:
 				h = cn.methodHandlerSet.get
@@ -592,19 +637,18 @@ OuterLoop:
 				h = cn.methodHandlerSet.trace
 			default:
 				for _, omh := range cn.otherMethodHandlers {
-					if req.Method == omh.method {
-						mh = omh.handler
+					if omh.method == req.Method {
+						h = omh.handler
 						break OuterLoop
 					}
 				}
 			}
 
-			if h == nil {
-				h = cn.catchAllHandler
+			if h == nil && cn.catchAllHandler != nil {
+				h = cn.catchAllHandler.handler
 			}
 
 			if h != nil {
-				mh = h
 				break
 			}
 		}
@@ -645,23 +689,20 @@ OuterLoop:
 		break
 	}
 
-	if cn == nil || mh == nil {
+	if cn == nil || h == nil {
 		if ppvs != nil {
 			r.pathParamValuesPool.Put(ppvs)
 		}
 
-		if sn != nil {
-			cn = sn
-			if cn.hasAtLeastOneHandler {
-				return r.methodNotAllowedHandler(), req
-			}
+		if sn != nil && sn.hasAtLeastOneHandler {
+			return r.methodNotAllowedHandler(), req
 		}
 
 		return r.notFoundHandler(), req
 	}
 
 	if len(cn.pathParamNames) > 0 {
-		return mh, req.WithContext(context.WithValue(
+		return h, req.WithContext(context.WithValue(
 			req.Context(),
 			pathParamsContextKey,
 			&pathParams{
@@ -671,7 +712,7 @@ OuterLoop:
 		))
 	}
 
-	return mh, req
+	return h, req
 }
 
 // ServeHTTP implements the `http.Handler`.
@@ -685,79 +726,123 @@ func (r *Router) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	h.ServeHTTP(rw, req)
 }
 
-// notFoundHandler returns an `http.Handler` to write 404 not found responses.
+// notFoundHandler returns an `http.Handler` to write not found responses.
 func (r *Router) notFoundHandler() http.Handler {
-	if r.NotFoundHandler != nil {
-		return r.NotFoundHandler
+	if r.chainedNotFoundHandler != nil {
+		return r.chainedNotFoundHandler
 	}
 
-	return http.HandlerFunc(notFound)
-}
-
-// methodNotAllowedHandler returns an `http.Handler` to write 405 method not
-// allowed responses.
-func (r *Router) methodNotAllowedHandler() http.Handler {
-	if r.MethodNotAllowedHandler != nil {
-		return r.MethodNotAllowedHandler
+	h := r.NotFoundHandler
+	if h == nil {
+		h = http.HandlerFunc(func(
+			rw http.ResponseWriter,
+			req *http.Request,
+		) {
+			http.Error(
+				rw,
+				http.StatusText(http.StatusNotFound),
+				http.StatusNotFound,
+			)
+		})
 	}
 
-	return http.HandlerFunc(methodNotAllowed)
-}
-
-// tsrHandler returns an `http.Handler` to write TSR (trailing slash redirect)
-// responses.
-func (r *Router) tsrHandler() http.Handler {
-	if r.TSRHandler != nil {
-		return r.TSRHandler
-	}
-
-	return http.HandlerFunc(tsr)
-}
-
-// notFound writes a 404 not found response.
-func notFound(rw http.ResponseWriter, req *http.Request) {
-	http.Error(
-		rw,
-		http.StatusText(http.StatusNotFound),
-		http.StatusNotFound,
-	)
-}
-
-// methodNotAllowed writes a 405 method not allowed response.
-func methodNotAllowed(rw http.ResponseWriter, req *http.Request) {
-	http.Error(
-		rw,
-		http.StatusText(http.StatusMethodNotAllowed),
-		http.StatusMethodNotAllowed,
-	)
-}
-
-// tsr writes a TSR (trailing slash redirect) response.
-func tsr(rw http.ResponseWriter, req *http.Request) {
-	requestURI := req.RequestURI
-	if requestURI == "" {
-		requestURI = "/"
-	} else {
-		path, query := requestURI, ""
-		for i := 0; i < len(path); i++ {
-			if path[i] == '?' {
-				query = path[i:]
-				path = path[:i]
-				break
+	if len(r.Middlewares) > 0 {
+		for i := len(r.Middlewares) - 1; i >= 0; i-- {
+			if r.Middlewares[i] != nil {
+				h = r.Middlewares[i].ChainHTTPHandler(h)
 			}
 		}
-
-		if path == "" || path[len(path)-1] != '/' {
-			path += "/"
-		}
-
-		requestURI = path + query
 	}
 
-	http.Redirect(rw, req, requestURI, http.StatusMovedPermanently)
+	r.chainedNotFoundHandler = h
+
+	return h
 }
 
-// routeNode is the node of the route radix tree.
+// methodNotAllowedHandler returns an `http.Handler` to write method not allowed
+// responses.
+func (r *Router) methodNotAllowedHandler() http.Handler {
+	if r.chainedMethodNotAllowedHandler != nil {
+		return r.chainedMethodNotAllowedHandler
+	}
+
+	h := r.MethodNotAllowedHandler
+	if h == nil {
+		h = http.HandlerFunc(func(
+			rw http.ResponseWriter,
+			req *http.Request,
+		) {
+			http.Error(
+				rw,
+				http.StatusText(http.StatusMethodNotAllowed),
+				http.StatusMethodNotAllowed,
+			)
+		})
+	}
+
+	if len(r.Middlewares) > 0 {
+		for i := len(r.Middlewares) - 1; i >= 0; i-- {
+			if r.Middlewares[i] != nil {
+				h = r.Middlewares[i].ChainHTTPHandler(h)
+			}
+		}
+	}
+
+	r.chainedMethodNotAllowedHandler = h
+
+	return h
+}
+
+// tsrHandler returns an `http.Handler` to write TSR (Trailing Slash Redirect)
+// responses.
+func (r *Router) tsrHandler() http.Handler {
+	h := r.TSRHandler
+	if h == nil {
+		h = http.HandlerFunc(func(
+			rw http.ResponseWriter,
+			req *http.Request,
+		) {
+			requestURI := req.RequestURI
+			if requestURI == "" {
+				requestURI = "/"
+			} else {
+				path, query := requestURI, ""
+				for i := 0; i < len(path); i++ {
+					if path[i] == '?' {
+						query = path[i:]
+						path = path[:i]
+						break
+					}
+				}
+
+				if path == "" || path[len(path)-1] != '/' {
+					path += "/"
+				}
+
+				requestURI = path + query
+			}
+
+			http.Redirect(
+				rw,
+				req,
+				requestURI,
+				http.StatusMovedPermanently,
+			)
+		})
+	}
+
+	if len(r.Middlewares) > 0 {
+		for i := len(r.Middlewares) - 1; i >= 0; i-- {
+			if r.Middlewares[i] != nil {
+				h = r.Middlewares[i].ChainHTTPHandler(h)
+			}
+		}
+	}
+
+	return h
+}
+
+// routeNode is a node of a route radix tree.
 type routeNode struct {
 	prefix               string
 	label                byte
@@ -770,7 +855,7 @@ type routeNode struct {
 	pathParamNames       []string
 	methodHandlerSet     *methodHandlerSet
 	otherMethodHandlers  []*methodHandler
-	catchAllHandler      http.Handler
+	catchAllHandler      *methodHandler
 	hasAtLeastOneHandler bool
 }
 
@@ -791,8 +876,15 @@ func (rn *routeNode) addChild(n *routeNode) {
 // setHandler sets the `h` to the `rn` based on the `method`.
 func (rn *routeNode) setHandler(method string, h http.Handler) {
 	switch method {
-	case "":
-		rn.catchAllHandler = h
+	case "", "_tsr":
+		if method == "_tsr" && rn.hasAtLeastOneHandler {
+			return
+		}
+
+		rn.catchAllHandler = &methodHandler{
+			method:  method,
+			handler: h,
+		}
 	case http.MethodGet:
 		rn.methodHandlerSet.get = h
 	case http.MethodHead:
@@ -814,7 +906,7 @@ func (rn *routeNode) setHandler(method string, h http.Handler) {
 	default:
 		var exists bool
 		for i, mh := range rn.otherMethodHandlers {
-			if method == mh.method {
+			if mh.method == method {
 				if h != nil {
 					mh.handler = h
 				} else {
@@ -841,24 +933,29 @@ func (rn *routeNode) setHandler(method string, h http.Handler) {
 		}
 	}
 
-	if h != nil {
-		rn.hasAtLeastOneHandler = true
-	} else {
-		rn.hasAtLeastOneHandler = rn.methodHandlerSet.get != nil ||
-			rn.methodHandlerSet.head != nil ||
-			rn.methodHandlerSet.post != nil ||
-			rn.methodHandlerSet.put != nil ||
-			rn.methodHandlerSet.patch != nil ||
-			rn.methodHandlerSet.delete != nil ||
-			rn.methodHandlerSet.connect != nil ||
-			rn.methodHandlerSet.options != nil ||
-			rn.methodHandlerSet.trace != nil ||
-			len(rn.otherMethodHandlers) > 0 ||
-			rn.catchAllHandler != nil
+	hasAtLeastOneMethodHandler := rn.methodHandlerSet.get != nil ||
+		rn.methodHandlerSet.head != nil ||
+		rn.methodHandlerSet.post != nil ||
+		rn.methodHandlerSet.put != nil ||
+		rn.methodHandlerSet.patch != nil ||
+		rn.methodHandlerSet.delete != nil ||
+		rn.methodHandlerSet.connect != nil ||
+		rn.methodHandlerSet.options != nil ||
+		rn.methodHandlerSet.trace != nil ||
+		len(rn.otherMethodHandlers) > 0
+
+	if method != "_tsr" &&
+		hasAtLeastOneMethodHandler &&
+		rn.catchAllHandler != nil &&
+		rn.catchAllHandler.method == "_tsr" {
+		rn.catchAllHandler = nil
 	}
+
+	rn.hasAtLeastOneHandler = hasAtLeastOneMethodHandler ||
+		rn.catchAllHandler != nil
 }
 
-// routeNodeType is the type of the `routeNode`.
+// routeNodeType is a type of a `routeNode`.
 type routeNodeType uint8
 
 // The route node types.
@@ -887,7 +984,7 @@ type methodHandler struct {
 	handler http.Handler
 }
 
-// pathParams is the path parameters.
+// pathParams is a set of path parameters.
 type pathParams struct {
 	names  []string
 	values []string

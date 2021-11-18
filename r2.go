@@ -5,7 +5,7 @@ package r2
 
 import "net/http"
 
-// contextKey is the context key.
+// contextKey is a key for use with the `context.WithValue`.
 type contextKey uint8
 
 // The context keys.

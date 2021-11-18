@@ -2,13 +2,13 @@ package r2
 
 import "net/http"
 
-// Middleware is used by the `Router` to chain the `http.Handler`s.
+// Middleware is used to chain the `http.Handler`s.
 type Middleware interface {
 	// ChainHTTPHandler chains the `next` to the returned `http.Handler`.
 	//
 	// Typically, the returned `http.Handler` is a closure which does
 	// something with the `http.ResponseWriter` and `http.Request` passed to
-	// it, and then calls the `next`.
+	// it, and then calls the `next.ServeHTTP`.
 	ChainHTTPHandler(next http.Handler) http.Handler
 }
 

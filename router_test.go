@@ -38,8 +38,6 @@ func TestRouterHandle(t *testing.T) {
 		t.Fatal("unexpected nil")
 	} else if r.registeredRoutes == nil {
 		t.Fatal("unexpected nil")
-	} else if r.overridableRoutes == nil {
-		t.Fatal("unexpected nil")
 	}
 
 	r = &Router{}
@@ -52,17 +50,24 @@ func TestRouterHandle(t *testing.T) {
 		t.Errorf("got %v, want nil", sr.routeTree)
 	} else if sr.registeredRoutes != nil {
 		t.Errorf("got %v, want nil", sr.registeredRoutes)
-	} else if sr.overridableRoutes != nil {
-		t.Errorf("got %v, want nil", sr.overridableRoutes)
 	} else if r.routeTree == nil {
 		t.Fatal("unexpected nil")
 	} else if r.routeTree.methodHandlerSet == nil {
 		t.Fatal("unexpected nil")
 	} else if r.registeredRoutes == nil {
 		t.Fatal("unexpected nil")
-	} else if r.overridableRoutes == nil {
-		t.Fatal("unexpected nil")
 	}
+
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatal("expected panic")
+			}
+		}()
+
+		r = &Router{}
+		r.Handle("_", "/", http.NotFoundHandler())
+	}()
 
 	func() {
 		defer func() {
@@ -140,6 +145,17 @@ func TestRouterHandle(t *testing.T) {
 		r = &Router{}
 		r.Handle("", "/foo/:bar1", http.NotFoundHandler())
 		r.Handle("", "/foo/:bar2", http.NotFoundHandler())
+	}()
+
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatal("expected panic")
+			}
+		}()
+
+		r = &Router{}
+		r.Handle("", "/foo/:", http.NotFoundHandler())
 	}()
 
 	func() {
@@ -840,7 +856,7 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 
-	r.Handle("", "/foo/bar", http.HandlerFunc(func(
+	r.Handle(http.MethodGet, "/foo/bar", http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {
@@ -865,11 +881,11 @@ func TestRouterHandler_wildcardParam(t *testing.T) {
 	mh, req = r.Handler(req)
 	mh.ServeHTTP(rec, req)
 	recr = rec.Result()
-	if want := http.StatusOK; recr.StatusCode != want {
+	if want := http.StatusMethodNotAllowed; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
 	} else if b, err := ioutil.ReadAll(recr.Body); err != nil {
 		t.Fatalf("unexpected error %q", err)
-	} else if want := "_ /foo/bar"; string(b) != want {
+	} else if want := "Method Not Allowed\n"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
 	}
 
@@ -1451,8 +1467,7 @@ func TestRouterServeHTTP(t *testing.T) {
 		routeTree: &routeNode{
 			methodHandlerSet: &methodHandlerSet{},
 		},
-		registeredRoutes:  map[string]bool{},
-		overridableRoutes: map[string]bool{},
+		registeredRoutes: map[string]bool{},
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -1506,6 +1521,17 @@ func TestRouterNotFoundHandler(t *testing.T) {
 	}
 
 	r = &Router{
+		Middlewares: []Middleware{MiddlewareFunc(func(
+			next http.Handler,
+		) http.Handler {
+			return http.HandlerFunc(func(
+				rw http.ResponseWriter,
+				req *http.Request,
+			) {
+				next.ServeHTTP(rw, req)
+				fmt.Fprint(rw, "middleware")
+			})
+		})},
 		NotFoundHandler: http.HandlerFunc(func(
 			rw http.ResponseWriter,
 			req *http.Request,
@@ -1522,7 +1548,7 @@ func TestRouterNotFoundHandler(t *testing.T) {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
 	} else if b, err := ioutil.ReadAll(recr.Body); err != nil {
 		t.Fatalf("unexpected error %q", err)
-	} else if want := "custom\n"; string(b) != want {
+	} else if want := "custom\nmiddleware"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
 	}
 }
@@ -1543,6 +1569,17 @@ func TestRouterMethodNotAllowedHandler(t *testing.T) {
 	}
 
 	r = &Router{
+		Middlewares: []Middleware{MiddlewareFunc(func(
+			next http.Handler,
+		) http.Handler {
+			return http.HandlerFunc(func(
+				rw http.ResponseWriter,
+				req *http.Request,
+			) {
+				next.ServeHTTP(rw, req)
+				fmt.Fprint(rw, "middleware")
+			})
+		})},
 		MethodNotAllowedHandler: http.HandlerFunc(func(
 			rw http.ResponseWriter,
 			req *http.Request,
@@ -1559,7 +1596,7 @@ func TestRouterMethodNotAllowedHandler(t *testing.T) {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
 	} else if b, err := ioutil.ReadAll(recr.Body); err != nil {
 		t.Fatalf("unexpected error %q", err)
-	} else if want := "custom\n"; string(b) != want {
+	} else if want := "custom\nmiddleware"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
 	}
 }
@@ -1606,15 +1643,22 @@ func TestRouterTSRHandler(t *testing.T) {
 	}
 
 	r = &Router{
+		Middlewares: []Middleware{MiddlewareFunc(func(
+			next http.Handler,
+		) http.Handler {
+			return http.HandlerFunc(func(
+				rw http.ResponseWriter,
+				req *http.Request,
+			) {
+				next.ServeHTTP(rw, req)
+				fmt.Fprint(rw, "middleware")
+			})
+		})},
 		TSRHandler: http.HandlerFunc(func(
 			rw http.ResponseWriter,
 			req *http.Request,
 		) {
-			http.Error(
-				rw,
-				http.StatusText(http.StatusNotFound),
-				http.StatusNotFound,
-			)
+			http.Error(rw, "custom", http.StatusBadRequest)
 		}),
 	}
 
@@ -1622,11 +1666,11 @@ func TestRouterTSRHandler(t *testing.T) {
 	rec = httptest.NewRecorder()
 	r.tsrHandler().ServeHTTP(rec, req)
 	recr = rec.Result()
-	if want := http.StatusNotFound; recr.StatusCode != want {
+	if want := http.StatusBadRequest; recr.StatusCode != want {
 		t.Errorf("got %d, want %d", recr.StatusCode, want)
 	} else if b, err := ioutil.ReadAll(recr.Body); err != nil {
 		t.Fatalf("unexpected error %q", err)
-	} else if want := "Not Found\n"; string(b) != want {
+	} else if want := "custom\nmiddleware"; string(b) != want {
 		t.Errorf("got %q, want %q", b, want)
 	}
 }
