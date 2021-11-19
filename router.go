@@ -10,8 +10,8 @@ import (
 
 // Router is a registry of all registered routes for HTTP request routing.
 //
-// Make sure that all the fields of the `Router` have been finalized before
-// calling the `Router.Handle`.
+// Make sure that all fields of the `Router` have been finalized before calling
+// any of its methods.
 type Router struct {
 	// Parent is the parent `Router`.
 	Parent *Router
@@ -58,6 +58,7 @@ type Router struct {
 	pathParamValuesPool            sync.Pool
 	chainedNotFoundHandler         http.Handler
 	chainedMethodNotAllowedHandler http.Handler
+	chainedTSRHandler              http.Handler
 }
 
 // Sub returns a new instance of the `Router` inherited from the `r` with the
@@ -70,8 +71,8 @@ func (r *Router) Sub(pathPrefix string, ms ...Middleware) *Router {
 	}
 }
 
-// Handle registers a new route for the `method` ("" means catch-all) and `path`
-// with the matching `h` and optional `ms`.
+// Handle registers a new route for the `method` (empty string means catch-all)
+// and `path` with the matching `h` and optional `ms`.
 //
 // A ':' followed by a name in the `path` declares a path parameter that matches
 // all characters except '/'. And an '*' in the `path` declares a wildcard path
@@ -102,6 +103,9 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 		}
 
 		r.registeredRoutes = map[string]bool{}
+		r.notFoundHandler()
+		r.methodNotAllowedHandler()
+		r.tsrHandler()
 	}
 
 	for _, c := range method {
@@ -286,14 +290,6 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 	}
 
 	r.insertRoute(method, path, h, staticRouteNode, pathParamNames)
-
-	// Rechain the `r.NotFoundHandler`.
-	r.chainedNotFoundHandler = nil
-	r.notFoundHandler()
-
-	// Rechain the `r.MethodNotAllowedHandler`.
-	r.chainedMethodNotAllowedHandler = nil
-	r.methodNotAllowedHandler()
 }
 
 // insertRoute inserts a new route into the `r.routeTree`.
@@ -453,8 +449,15 @@ func (r *Router) insertRoute(
 	}
 }
 
-// Handler returns a matched `http.Handler` for the `req` alongside with its
-// revision.
+// Handler returns a matched `http.Handler` for the `req` along with a possible
+// revision of the `req`. It takes the `req.Method` and absolute path from the
+// `req.RequestURI` to match, so the `req.RequestURI` is assumed to be in the
+// origin-form (see RFC 7230, section 5.3.1).
+//
+// The returned `http.Handler` is always non-nil.
+//
+// The revision of the `req` only happens when the matched route has at least
+// one path parameter. Otherwise, the `req` itself is returned.
 func (r *Router) Handler(req *http.Request) (http.Handler, *http.Request) {
 	if r.Parent != nil {
 		return r.Parent.Handler(req)
@@ -480,10 +483,9 @@ func (r *Router) Handler(req *http.Request) (http.Handler, *http.Request) {
 		ll   int           // LCP length
 		ml   int           // Minimum length of the `sl` and `pl`
 		cn   = r.routeTree // Current node
-		nn   *routeNode    // Next node
-		nnt  routeNodeType // Next node type
 		sn   *routeNode    // Saved node
-		snt  routeNodeType // Saved node type
+		fnt  routeNodeType // From node type
+		nnt  routeNodeType // Next node type
 		ppi  int           // Path parameter index
 		ppvs []string      // Path parameter values
 		i    int           // Index
@@ -515,8 +517,8 @@ OuterLoop:
 			}
 
 			if ll != pl {
-				snt = staticRouteNode
-				goto StruggleForTheFormerNode
+				fnt = staticRouteNode
+				goto BacktrackToPreviousNode
 			}
 
 			s = s[ll:]
@@ -653,20 +655,13 @@ OuterLoop:
 			}
 		}
 
-		snt = wildcardParamRouteNode
+		fnt = wildcardParamRouteNode
 
-		// Struggle for the former node.
-	StruggleForTheFormerNode:
-		nn = cn
-		if nn.typ < wildcardParamRouteNode {
-			nnt = nn.typ + 1
-		} else {
-			nnt = staticRouteNode
-		}
-
-		if snt != staticRouteNode {
-			if nn.typ == staticRouteNode {
-				si -= len(nn.prefix)
+		// Backtrack to previous node.
+	BacktrackToPreviousNode:
+		if fnt != staticRouteNode {
+			if cn.typ == staticRouteNode {
+				si -= len(cn.prefix)
 			} else {
 				ppi--
 				si -= len(ppvs[ppi])
@@ -675,14 +670,21 @@ OuterLoop:
 			s = path[si:]
 		}
 
-		if cn = cn.parent; cn != nil {
+		if cn.typ < wildcardParamRouteNode {
+			nnt = cn.typ + 1
+		} else {
+			nnt = staticRouteNode
+		}
+
+		cn = cn.parent
+		if cn != nil {
 			switch nnt {
 			case paramRouteNode:
 				goto TryParamNode
 			case wildcardParamRouteNode:
 				goto TryWildcardParamNode
 			}
-		} else if snt == staticRouteNode {
+		} else if fnt == staticRouteNode {
 			sn = nil
 		}
 
@@ -796,6 +798,10 @@ func (r *Router) methodNotAllowedHandler() http.Handler {
 // tsrHandler returns an `http.Handler` to write TSR (Trailing Slash Redirect)
 // responses.
 func (r *Router) tsrHandler() http.Handler {
+	if r.chainedTSRHandler != nil {
+		return r.chainedTSRHandler
+	}
+
 	h := r.TSRHandler
 	if h == nil {
 		h = http.HandlerFunc(func(
@@ -838,6 +844,8 @@ func (r *Router) tsrHandler() http.Handler {
 			}
 		}
 	}
+
+	r.chainedTSRHandler = h
 
 	return h
 }

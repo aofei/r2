@@ -17,6 +17,6 @@ type Middleware interface {
 type MiddlewareFunc func(next http.Handler) http.Handler
 
 // ChainHTTPHandler implements the `Middleware`.
-func (mwf MiddlewareFunc) ChainHTTPHandler(next http.Handler) http.Handler {
-	return mwf(next)
+func (mf MiddlewareFunc) ChainHTTPHandler(next http.Handler) http.Handler {
+	return mf(next)
 }

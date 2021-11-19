@@ -8,7 +8,7 @@ import (
 )
 
 func TestMiddlewareFuncChainHTTPHandler(t *testing.T) {
-	mwf := MiddlewareFunc(func(next http.Handler) http.Handler {
+	mf := MiddlewareFunc(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(
 			rw http.ResponseWriter,
 			req *http.Request,
@@ -21,7 +21,7 @@ func TestMiddlewareFuncChainHTTPHandler(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 
-	mwf.ChainHTTPHandler(http.HandlerFunc(func(
+	mf.ChainHTTPHandler(http.HandlerFunc(func(
 		rw http.ResponseWriter,
 		req *http.Request,
 	) {

@@ -185,7 +185,7 @@ func TestRouterHandler(t *testing.T) {
 	h := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		fmt.Fprint(rw, req.Host == "www.example.com")
 	})
-	mwf := MiddlewareFunc(func(next http.Handler) http.Handler {
+	mf := MiddlewareFunc(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(
 			rw http.ResponseWriter,
 			req *http.Request,
@@ -196,7 +196,7 @@ func TestRouterHandler(t *testing.T) {
 	})
 
 	r := &Router{}
-	r.Handle("", "/", h, mwf)
+	r.Handle("", "/", h, mf)
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	mh, req := r.Handler(req)
@@ -215,7 +215,7 @@ func TestRouterHandler(t *testing.T) {
 		Parent:     r,
 		PathPrefix: "/foo",
 	}
-	sr.Handle("", "/", h, mwf)
+	sr.Handle("", "/", h, mf)
 	req = httptest.NewRequest(http.MethodGet, "/foo/", nil)
 	rec = httptest.NewRecorder()
 	mh, req = sr.Handler(req)
@@ -230,7 +230,7 @@ func TestRouterHandler(t *testing.T) {
 	}
 
 	r = &Router{}
-	r.Handle("", "/", h, mwf)
+	r.Handle("", "/", h, mf)
 	req = httptest.NewRequest(http.MethodGet, "/", nil)
 	req.RequestURI = ""
 	rec = httptest.NewRecorder()
@@ -246,7 +246,7 @@ func TestRouterHandler(t *testing.T) {
 	}
 
 	r = &Router{}
-	r.Handle("", "/", h, mwf)
+	r.Handle("", "/", h, mf)
 	req = httptest.NewRequest(http.MethodGet, "/?foo=bar", nil)
 	rec = httptest.NewRecorder()
 	mh, req = r.Handler(req)

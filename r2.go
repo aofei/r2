@@ -13,7 +13,8 @@ const (
 	pathParamsContextKey contextKey = iota
 )
 
-// PathParam returns a path parameter value of the `req` for the `name`.
+// PathParam returns a path parameter value of the `req` for the `name`. It
+// returns empty string if not found.
 func PathParam(req *http.Request, name string) string {
 	pps, ok := req.Context().Value(pathParamsContextKey).(*pathParams)
 	if !ok {
@@ -29,7 +30,8 @@ func PathParam(req *http.Request, name string) string {
 	return ""
 }
 
-// PathParamNames returns path parameter names of the `req`.
+// PathParamNames returns path parameter names of the `req`. It returns nil if
+// not found.
 func PathParamNames(req *http.Request) []string {
 	pps, ok := req.Context().Value(pathParamsContextKey).(*pathParams)
 	if !ok {
@@ -39,7 +41,8 @@ func PathParamNames(req *http.Request) []string {
 	return pps.names
 }
 
-// PathParamValues returns path parameter values of the `req`.
+// PathParamValues returns path parameter values of the `req`. It returns nil if
+// not found.
 func PathParamValues(req *http.Request) []string {
 	pps, ok := req.Context().Value(pathParamsContextKey).(*pathParams)
 	if !ok {
