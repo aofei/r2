@@ -463,7 +463,9 @@ func (r *Router) Handler(req *http.Request) (http.Handler, *http.Request) {
 		return r.Parent.Handler(req)
 	}
 
-	if req.RequestURI == "" || req.RequestURI[0] != '/' {
+	if r.routeTree == nil ||
+		req.RequestURI == "" ||
+		req.RequestURI[0] != '/' {
 		return r.notFoundHandler(), req
 	}
 

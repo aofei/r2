@@ -211,6 +211,20 @@ func TestRouterHandler(t *testing.T) {
 	}
 
 	r = &Router{}
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	rec = httptest.NewRecorder()
+	mh, req = r.Handler(req)
+	mh.ServeHTTP(rec, req)
+	recr = rec.Result()
+	if want := http.StatusNotFound; recr.StatusCode != want {
+		t.Errorf("got %d, want %d", recr.StatusCode, want)
+	} else if b, err := ioutil.ReadAll(recr.Body); err != nil {
+		t.Fatalf("unexpected error %q", err)
+	} else if want := "Not Found\n"; string(b) != want {
+		t.Errorf("got %q, want %q", b, want)
+	}
+
+	r = &Router{}
 	sr := &Router{
 		Parent:     r,
 		PathPrefix: "/foo",
