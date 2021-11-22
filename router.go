@@ -196,9 +196,10 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 			req *http.Request,
 		) {
 			ph.ServeHTTP(rw, req)
-			pps := req.Context().
-				Value(pathParamsContextKey).(*pathParams)
-			r.pathParamValuesPool.Put(pps.values)
+			d, ok := req.Context().Value(dataContextKey).(*data)
+			if ok {
+				r.pathParamValuesPool.Put(d.pathParamValues)
+			}
 		})
 	}
 
@@ -457,7 +458,8 @@ func (r *Router) insertRoute(
 // The returned `http.Handler` is always non-nil.
 //
 // The revision of the `req` only happens when the matched route has at least
-// one path parameter. Otherwise, the `req` itself is returned.
+// one path parameter and the result of `req.Context()` has nothing to do with
+// the `Context`. Otherwise, the `req` itself is returned.
 func (r *Router) Handler(req *http.Request) (http.Handler, *http.Request) {
 	if r.Parent != nil {
 		return r.Parent.Handler(req)
@@ -706,14 +708,19 @@ OuterLoop:
 	}
 
 	if len(cn.pathParamNames) > 0 {
-		return h, req.WithContext(context.WithValue(
-			req.Context(),
-			pathParamsContextKey,
-			&pathParams{
-				names:  cn.pathParamNames,
-				values: ppvs,
-			},
-		))
+		if d, ok := req.Context().Value(dataContextKey).(*data); ok {
+			d.pathParamNames = cn.pathParamNames
+			d.pathParamValues = ppvs
+		} else {
+			req = req.WithContext(context.WithValue(
+				req.Context(),
+				dataContextKey,
+				&data{
+					pathParamNames:  cn.pathParamNames,
+					pathParamValues: ppvs,
+				},
+			))
+		}
 	}
 
 	return h, req
@@ -992,10 +999,4 @@ type methodHandlerSet struct {
 type methodHandler struct {
 	method  string
 	handler http.Handler
-}
-
-// pathParams is a set of path parameters.
-type pathParams struct {
-	names  []string
-	values []string
 }

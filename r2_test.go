@@ -7,6 +7,17 @@ import (
 	"testing"
 )
 
+func TestContext(t *testing.T) {
+	ctx := Context()
+	if ctx == nil {
+		t.Fatal("unexpected nil")
+	} else if dc, ok := ctx.(*dataContext); !ok {
+		t.Error("want true")
+	} else if dc.d == nil {
+		t.Fatal("unexpected nil")
+	}
+}
+
 func TestPathParam(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	if got, want := PathParam(req, "foo"), ""; got != want {
@@ -15,22 +26,22 @@ func TestPathParam(t *testing.T) {
 
 	req = req.WithContext(context.WithValue(
 		context.Background(),
-		pathParamsContextKey,
+		dataContextKey,
 		"invalid",
 	))
 	if got, want := PathParam(req, "foo"), ""; got != want {
 		t.Errorf("got %s, want %s", got, want)
 	}
 
-	pps := &pathParams{
-		names:  []string{"foo", "bar"},
-		values: []string{"bar", "foo"},
+	d := &data{
+		pathParamNames:  []string{"foo", "bar"},
+		pathParamValues: []string{"bar", "foo"},
 	}
 
 	req = req.WithContext(context.WithValue(
 		context.Background(),
-		pathParamsContextKey,
-		pps,
+		dataContextKey,
+		d,
 	))
 	if got, want := PathParam(req, "foo"), "bar"; got != want {
 		t.Errorf("got %s, want %s", got, want)
@@ -49,7 +60,7 @@ func TestPathParamNames(t *testing.T) {
 
 	req = req.WithContext(context.WithValue(
 		context.Background(),
-		pathParamsContextKey,
+		dataContextKey,
 		"invalid",
 	))
 	if ppns := PathParamNames(req); ppns != nil {
@@ -58,10 +69,10 @@ func TestPathParamNames(t *testing.T) {
 
 	req = req.WithContext(context.WithValue(
 		context.Background(),
-		pathParamsContextKey,
-		&pathParams{
-			names:  []string{"foo"},
-			values: []string{"bar"},
+		dataContextKey,
+		&data{
+			pathParamNames:  []string{"foo"},
+			pathParamValues: []string{"bar"},
 		},
 	))
 	if ppns := PathParamNames(req); ppns == nil {
@@ -79,26 +90,43 @@ func TestParamValues(t *testing.T) {
 
 	req = req.WithContext(context.WithValue(
 		context.Background(),
-		pathParamsContextKey,
+		dataContextKey,
 		"invalid",
 	))
 	if ppvs := PathParamValues(req); ppvs != nil {
 		t.Errorf("got %v, want nil", ppvs)
 	}
 
-	pps := &pathParams{
-		names:  []string{"foo"},
-		values: []string{"bar1", "bar2"},
+	d := &data{
+		pathParamNames:  []string{"foo"},
+		pathParamValues: []string{"bar1", "bar2"},
 	}
 
 	req = req.WithContext(context.WithValue(
 		context.Background(),
-		pathParamsContextKey,
-		pps,
+		dataContextKey,
+		d,
 	))
 	if ppvs := PathParamValues(req); ppvs == nil {
 		t.Fatal("unexpected nil")
 	} else if got, want := len(ppvs), 1; got != want {
 		t.Errorf("got %d, want %d", got, want)
+	}
+}
+
+func TestDataContext(t *testing.T) {
+	dc := &dataContext{d: &data{}}
+	if deadline, ok := dc.Deadline(); !deadline.IsZero() {
+		t.Error("want true")
+	} else if ok {
+		t.Error("want false")
+	} else if got := dc.Done(); got != nil {
+		t.Errorf("got %v, want nil", got)
+	} else if got := dc.Err(); got != nil {
+		t.Errorf("got %v, want nil", got)
+	} else if dc.Value(dataContextKey) == nil {
+		t.Fatal("unexpected nil")
+	} else if got := dc.Value(contextKey(255)); got != nil {
+		t.Errorf("got %v, want nil", got)
 	}
 }

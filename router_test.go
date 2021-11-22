@@ -553,6 +553,7 @@ func TestRouterHandler_param(t *testing.T) {
 	}))
 
 	req = httptest.NewRequest(http.MethodGet, "/foo/bar", nil)
+	req = req.WithContext(&dataContext{d: &data{}})
 	rec = httptest.NewRecorder()
 	mh, req = r.Handler(req)
 	mh.ServeHTTP(rec, req)
@@ -1927,7 +1928,7 @@ func TestRouterHandler_misc(t *testing.T) {
 
 	for _, route := range routes {
 		routeName := fmt.Sprintf("%s %s", route.method, route.path)
-		routePathParams := &pathParams{}
+		data := &data{}
 		for i, l := 0, len(route.path); i < l; i++ {
 			switch route.path[i] {
 			case ':':
@@ -1935,21 +1936,21 @@ func TestRouterHandler_misc(t *testing.T) {
 				for ; i < l && route.path[i] != '/'; i++ {
 				}
 
-				routePathParams.names = append(
-					routePathParams.names,
+				data.pathParamNames = append(
+					data.pathParamNames,
 					route.path[j:i],
 				)
-				routePathParams.values = append(
-					routePathParams.values,
+				data.pathParamValues = append(
+					data.pathParamValues,
 					route.path[j-1:i],
 				)
 			case '*':
-				routePathParams.names = append(
-					routePathParams.names,
+				data.pathParamNames = append(
+					data.pathParamNames,
 					"*",
 				)
-				routePathParams.values = append(
-					routePathParams.values,
+				data.pathParamValues = append(
+					data.pathParamValues,
 					"*",
 				)
 			}
@@ -1966,7 +1967,7 @@ func TestRouterHandler_misc(t *testing.T) {
 			t.Fatalf("unexpected error %q", err)
 		} else if string(b) != routeName {
 			t.Errorf("got %q, want %q", b, want)
-		} else if l := len(routePathParams.names); l > 0 {
+		} else if l := len(data.pathParamNames); l > 0 {
 			ppns := PathParamNames(req)
 			if ppns == nil {
 				t.Fatal("unexpected nil")
@@ -1975,19 +1976,19 @@ func TestRouterHandler_misc(t *testing.T) {
 			}
 
 			for i, ppn := range ppns {
-				want := routePathParams.names[i]
+				want := data.pathParamNames[i]
 				if ppn != want {
 					t.Errorf("got %q, want %q", ppn, want)
 				}
 			}
-		} else if l := len(routePathParams.values); l > 0 {
+		} else if l := len(data.pathParamValues); l > 0 {
 			ppvs := PathParamValues(req)
 			if ppvs == nil {
 				t.Fatal("unexpected nil")
 			}
 
 			for i, ppv := range ppvs {
-				want := routePathParams.values[i]
+				want := data.pathParamValues[i]
 				if ppv != want {
 					t.Errorf("got %q, want %q", ppv, want)
 				}
