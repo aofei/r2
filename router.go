@@ -99,7 +99,8 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 
 	if r.routeTree == nil {
 		r.routeTree = &routeNode{
-			methodHandlerSet: &methodHandlerSet{},
+			staticChildren: make([]*routeNode, 255),
+			methodHandlers: &methodHandlers{},
 		}
 
 		r.registeredRoutes = map[string]bool{}
@@ -350,14 +351,16 @@ func (r *Router) insertRoute(
 				wildcardParamChild:   cn.wildcardParamChild,
 				hasAtLeastOneChild:   cn.hasAtLeastOneChild,
 				pathParamNames:       cn.pathParamNames,
-				methodHandlerSet:     cn.methodHandlerSet,
+				methodHandlers:       cn.methodHandlers,
 				otherMethodHandlers:  cn.otherMethodHandlers,
 				catchAllHandler:      cn.catchAllHandler,
 				hasAtLeastOneHandler: cn.hasAtLeastOneHandler,
 			}
 
 			for _, n := range nn.staticChildren {
-				n.parent = nn
+				if n != nil {
+					n.parent = nn
+				}
 			}
 
 			if nn.paramChild != nil {
@@ -372,12 +375,12 @@ func (r *Router) insertRoute(
 			cn.prefix = cn.prefix[:ll]
 			cn.label = cn.prefix[0]
 			cn.typ = staticRouteNode
-			cn.staticChildren = nil
+			cn.staticChildren = make([]*routeNode, 255)
 			cn.paramChild = nil
 			cn.wildcardParamChild = nil
 			cn.hasAtLeastOneChild = false
 			cn.pathParamNames = nil
-			cn.methodHandlerSet = &methodHandlerSet{}
+			cn.methodHandlers = &methodHandlers{}
 			cn.otherMethodHandlers = nil
 			cn.catchAllHandler = nil
 			cn.hasAtLeastOneHandler = false
@@ -389,12 +392,13 @@ func (r *Router) insertRoute(
 				cn.setHandler(method, h)
 			} else { // Create child node
 				nn = &routeNode{
-					prefix:           s[ll:],
-					label:            s[ll],
-					typ:              nt,
-					parent:           cn,
-					pathParamNames:   pathParamNames,
-					methodHandlerSet: &methodHandlerSet{},
+					prefix:         s[ll:],
+					label:          s[ll],
+					typ:            nt,
+					parent:         cn,
+					staticChildren: make([]*routeNode, 255),
+					pathParamNames: pathParamNames,
+					methodHandlers: &methodHandlers{},
 				}
 
 				nn.setHandler(method, h)
@@ -411,12 +415,7 @@ func (r *Router) insertRoute(
 			case '*':
 				nn = cn.wildcardParamChild
 			default:
-				for _, n := range cn.staticChildren {
-					if n.label == s[0] {
-						nn = n
-						break
-					}
-				}
+				nn = cn.staticChildren[s[0]]
 			}
 
 			if nn != nil {
@@ -427,12 +426,13 @@ func (r *Router) insertRoute(
 
 			// Create child node.
 			nn = &routeNode{
-				prefix:           s,
-				label:            s[0],
-				typ:              nt,
-				parent:           cn,
-				pathParamNames:   pathParamNames,
-				methodHandlerSet: &methodHandlerSet{},
+				prefix:         s,
+				label:          s[0],
+				typ:            nt,
+				parent:         cn,
+				staticChildren: make([]*routeNode, 255),
+				pathParamNames: pathParamNames,
+				methodHandlers: &methodHandlers{},
 			}
 
 			nn.setHandler(method, h)
@@ -515,23 +515,23 @@ OuterLoop:
 
 			switch req.Method {
 			case http.MethodGet:
-				h = cn.methodHandlerSet.get
+				h = cn.methodHandlers.get
 			case http.MethodHead:
-				h = cn.methodHandlerSet.head
+				h = cn.methodHandlers.head
 			case http.MethodPost:
-				h = cn.methodHandlerSet.post
+				h = cn.methodHandlers.post
 			case http.MethodPut:
-				h = cn.methodHandlerSet.put
+				h = cn.methodHandlers.put
 			case http.MethodPatch:
-				h = cn.methodHandlerSet.patch
+				h = cn.methodHandlers.patch
 			case http.MethodDelete:
-				h = cn.methodHandlerSet.delete
+				h = cn.methodHandlers.delete
 			case http.MethodConnect:
-				h = cn.methodHandlerSet.connect
+				h = cn.methodHandlers.connect
 			case http.MethodOptions:
-				h = cn.methodHandlerSet.options
+				h = cn.methodHandlers.options
 			case http.MethodTrace:
-				h = cn.methodHandlerSet.trace
+				h = cn.methodHandlers.trace
 			default:
 				for _, omh := range cn.otherMethodHandlers {
 					if omh.method == req.Method {
@@ -551,13 +551,9 @@ OuterLoop:
 		}
 
 		// Try static node.
-		if s != "" {
-			for _, n := range cn.staticChildren {
-				if n.label == s[0] {
-					cn = n
-					continue OuterLoop
-				}
-			}
+		if s != "" && cn.staticChildren[s[0]] != nil {
+			cn = cn.staticChildren[s[0]]
+			continue OuterLoop
 		}
 
 		// Try parameter node.
@@ -603,23 +599,23 @@ OuterLoop:
 
 			switch req.Method {
 			case http.MethodGet:
-				h = cn.methodHandlerSet.get
+				h = cn.methodHandlers.get
 			case http.MethodHead:
-				h = cn.methodHandlerSet.head
+				h = cn.methodHandlers.head
 			case http.MethodPost:
-				h = cn.methodHandlerSet.post
+				h = cn.methodHandlers.post
 			case http.MethodPut:
-				h = cn.methodHandlerSet.put
+				h = cn.methodHandlers.put
 			case http.MethodPatch:
-				h = cn.methodHandlerSet.patch
+				h = cn.methodHandlers.patch
 			case http.MethodDelete:
-				h = cn.methodHandlerSet.delete
+				h = cn.methodHandlers.delete
 			case http.MethodConnect:
-				h = cn.methodHandlerSet.connect
+				h = cn.methodHandlers.connect
 			case http.MethodOptions:
-				h = cn.methodHandlerSet.options
+				h = cn.methodHandlers.options
 			case http.MethodTrace:
-				h = cn.methodHandlerSet.trace
+				h = cn.methodHandlers.trace
 			default:
 				for _, omh := range cn.otherMethodHandlers {
 					if omh.method == req.Method {
@@ -849,7 +845,7 @@ type routeNode struct {
 	wildcardParamChild   *routeNode
 	hasAtLeastOneChild   bool
 	pathParamNames       []string
-	methodHandlerSet     *methodHandlerSet
+	methodHandlers       *methodHandlers
 	otherMethodHandlers  []*methodHandler
 	catchAllHandler      *methodHandler
 	hasAtLeastOneHandler bool
@@ -859,7 +855,7 @@ type routeNode struct {
 func (rn *routeNode) addChild(n *routeNode) {
 	switch n.typ {
 	case staticRouteNode:
-		rn.staticChildren = append(rn.staticChildren, n)
+		rn.staticChildren[n.label] = n
 	case paramRouteNode:
 		rn.paramChild = n
 	case wildcardParamRouteNode:
@@ -882,23 +878,23 @@ func (rn *routeNode) setHandler(method string, h http.Handler) {
 			handler: h,
 		}
 	case http.MethodGet:
-		rn.methodHandlerSet.get = h
+		rn.methodHandlers.get = h
 	case http.MethodHead:
-		rn.methodHandlerSet.head = h
+		rn.methodHandlers.head = h
 	case http.MethodPost:
-		rn.methodHandlerSet.post = h
+		rn.methodHandlers.post = h
 	case http.MethodPut:
-		rn.methodHandlerSet.put = h
+		rn.methodHandlers.put = h
 	case http.MethodPatch:
-		rn.methodHandlerSet.patch = h
+		rn.methodHandlers.patch = h
 	case http.MethodDelete:
-		rn.methodHandlerSet.delete = h
+		rn.methodHandlers.delete = h
 	case http.MethodConnect:
-		rn.methodHandlerSet.connect = h
+		rn.methodHandlers.connect = h
 	case http.MethodOptions:
-		rn.methodHandlerSet.options = h
+		rn.methodHandlers.options = h
 	case http.MethodTrace:
-		rn.methodHandlerSet.trace = h
+		rn.methodHandlers.trace = h
 	default:
 		var exists bool
 		for i, mh := range rn.otherMethodHandlers {
@@ -929,15 +925,15 @@ func (rn *routeNode) setHandler(method string, h http.Handler) {
 		}
 	}
 
-	hasAtLeastOneMethodHandler := rn.methodHandlerSet.get != nil ||
-		rn.methodHandlerSet.head != nil ||
-		rn.methodHandlerSet.post != nil ||
-		rn.methodHandlerSet.put != nil ||
-		rn.methodHandlerSet.patch != nil ||
-		rn.methodHandlerSet.delete != nil ||
-		rn.methodHandlerSet.connect != nil ||
-		rn.methodHandlerSet.options != nil ||
-		rn.methodHandlerSet.trace != nil ||
+	hasAtLeastOneMethodHandler := rn.methodHandlers.get != nil ||
+		rn.methodHandlers.head != nil ||
+		rn.methodHandlers.post != nil ||
+		rn.methodHandlers.put != nil ||
+		rn.methodHandlers.patch != nil ||
+		rn.methodHandlers.delete != nil ||
+		rn.methodHandlers.connect != nil ||
+		rn.methodHandlers.options != nil ||
+		rn.methodHandlers.trace != nil ||
 		len(rn.otherMethodHandlers) > 0
 
 	if method != "_tsr" &&
@@ -961,8 +957,14 @@ const (
 	wildcardParamRouteNode
 )
 
-// methodHandlerSet is a set of `http.Handler`s for the well-known HTTP methods.
-type methodHandlerSet struct {
+// methodHandler is a `http.Handler` for an HTTP method.
+type methodHandler struct {
+	method  string
+	handler http.Handler
+}
+
+// methodHandlers is a set of `http.Handler`s for some well-known HTTP methods.
+type methodHandlers struct {
 	get     http.Handler
 	head    http.Handler
 	post    http.Handler
@@ -972,10 +974,4 @@ type methodHandlerSet struct {
 	connect http.Handler
 	options http.Handler
 	trace   http.Handler
-}
-
-// methodHandler is a `http.Handler` for an HTTP method.
-type methodHandler struct {
-	method  string
-	handler http.Handler
 }

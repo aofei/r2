@@ -34,7 +34,7 @@ func TestRouterHandle(t *testing.T) {
 	r.Handle("", "/", http.NotFoundHandler())
 	if r.routeTree == nil {
 		t.Fatal("unexpected nil")
-	} else if r.routeTree.methodHandlerSet == nil {
+	} else if r.routeTree.methodHandlers == nil {
 		t.Fatal("unexpected nil")
 	} else if r.registeredRoutes == nil {
 		t.Fatal("unexpected nil")
@@ -52,7 +52,7 @@ func TestRouterHandle(t *testing.T) {
 		t.Errorf("got %v, want nil", sr.registeredRoutes)
 	} else if r.routeTree == nil {
 		t.Fatal("unexpected nil")
-	} else if r.routeTree.methodHandlerSet == nil {
+	} else if r.routeTree.methodHandlers == nil {
 		t.Fatal("unexpected nil")
 	} else if r.registeredRoutes == nil {
 		t.Fatal("unexpected nil")
@@ -2004,7 +2004,8 @@ func TestRouterServeHTTP(t *testing.T) {
 			http.Error(rw, "r1: not found", http.StatusNotFound)
 		}),
 		routeTree: &routeNode{
-			methodHandlerSet: &methodHandlerSet{},
+			staticChildren: make([]*routeNode, 255),
+			methodHandlers: &methodHandlers{},
 		},
 		registeredRoutes: map[string]bool{},
 	}
@@ -2215,7 +2216,10 @@ func TestRouterTSRHandler(t *testing.T) {
 }
 
 func TestRouteNodeAddChild(t *testing.T) {
-	rn := &routeNode{}
+	rn := &routeNode{
+		staticChildren: make([]*routeNode, 255),
+	}
+
 	rn.addChild(&routeNode{
 		label: 'a',
 		typ:   staticRouteNode,
@@ -2228,8 +2232,8 @@ func TestRouteNodeAddChild(t *testing.T) {
 		label: '*',
 		typ:   wildcardParamRouteNode,
 	})
-	if got, want := len(rn.staticChildren), 1; got != want {
-		t.Errorf("got %d, want %d", got, want)
+	if got := rn.staticChildren['a']; got == nil {
+		t.Fatal("unexpected nil")
 	} else if rn.paramChild == nil {
 		t.Fatal("unexpected nil")
 	} else if rn.wildcardParamChild == nil {
@@ -2239,93 +2243,93 @@ func TestRouteNodeAddChild(t *testing.T) {
 	}
 }
 
-func TestRouteNodeSetHandler(t *testing.T) {
+func TestRouteNodesHandler(t *testing.T) {
 	h := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 	})
 
 	rn := &routeNode{
-		methodHandlerSet: &methodHandlerSet{},
+		methodHandlers: &methodHandlers{},
 	}
 
 	rn.setHandler(http.MethodGet, h)
-	if rn.methodHandlerSet.get == nil {
+	if rn.methodHandlers.get == nil {
 		t.Fatal("unexpected nil")
 	}
 
 	rn = &routeNode{
-		methodHandlerSet: &methodHandlerSet{},
+		methodHandlers: &methodHandlers{},
 	}
 
 	rn.setHandler(http.MethodHead, h)
-	if rn.methodHandlerSet.head == nil {
+	if rn.methodHandlers.head == nil {
 		t.Fatal("unexpected nil")
 	}
 
 	rn = &routeNode{
-		methodHandlerSet: &methodHandlerSet{},
+		methodHandlers: &methodHandlers{},
 	}
 
 	rn.setHandler(http.MethodPost, h)
-	if rn.methodHandlerSet.post == nil {
+	if rn.methodHandlers.post == nil {
 		t.Fatal("unexpected nil")
 	}
 
 	rn = &routeNode{
-		methodHandlerSet: &methodHandlerSet{},
+		methodHandlers: &methodHandlers{},
 	}
 
 	rn.setHandler(http.MethodPut, h)
-	if rn.methodHandlerSet.put == nil {
+	if rn.methodHandlers.put == nil {
 		t.Fatal("unexpected nil")
 	}
 
 	rn = &routeNode{
-		methodHandlerSet: &methodHandlerSet{},
+		methodHandlers: &methodHandlers{},
 	}
 
 	rn.setHandler(http.MethodPatch, h)
-	if rn.methodHandlerSet.patch == nil {
+	if rn.methodHandlers.patch == nil {
 		t.Fatal("unexpected nil")
 	}
 
 	rn = &routeNode{
-		methodHandlerSet: &methodHandlerSet{},
+		methodHandlers: &methodHandlers{},
 	}
 
 	rn.setHandler(http.MethodDelete, h)
-	if rn.methodHandlerSet.delete == nil {
+	if rn.methodHandlers.delete == nil {
 		t.Fatal("unexpected nil")
 	}
 
 	rn = &routeNode{
-		methodHandlerSet: &methodHandlerSet{},
+		methodHandlers: &methodHandlers{},
 	}
 
 	rn.setHandler(http.MethodConnect, h)
-	if rn.methodHandlerSet.connect == nil {
+	if rn.methodHandlers.connect == nil {
 		t.Fatal("unexpected nil")
 	}
 
 	rn = &routeNode{
-		methodHandlerSet: &methodHandlerSet{},
+		methodHandlers: &methodHandlers{},
 	}
 
 	rn.setHandler(http.MethodOptions, h)
-	if rn.methodHandlerSet.options == nil {
+	if rn.methodHandlers.options == nil {
 		t.Fatal("unexpected nil")
 	}
 
 	rn = &routeNode{
-		methodHandlerSet: &methodHandlerSet{},
+		methodHandlers: &methodHandlers{},
 	}
 
 	rn.setHandler(http.MethodTrace, h)
-	if rn.methodHandlerSet.trace == nil {
+	if rn.methodHandlers.trace == nil {
 		t.Fatal("unexpected nil")
 	}
 
 	rn = &routeNode{
-		methodHandlerSet: &methodHandlerSet{},
+		methodHandlers: &methodHandlers{},
 	}
 
 	rn.setHandler("foobar", h)
@@ -2345,7 +2349,7 @@ func TestRouteNodeSetHandler(t *testing.T) {
 	}
 
 	rn = &routeNode{
-		methodHandlerSet: &methodHandlerSet{},
+		methodHandlers: &methodHandlers{},
 	}
 
 	rn.setHandler("", h)
