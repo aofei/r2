@@ -451,9 +451,7 @@ func (r *Router) insertRoute(
 }
 
 // Handler returns a matched `http.Handler` for the `req` along with a possible
-// revision of the `req`. It takes the `req.Method` and absolute path from the
-// `req.RequestURI` to match, so the `req.RequestURI` is assumed to be in the
-// origin-form (see RFC 7230, section 5.3.1).
+// revision of the `req`.
 //
 // The returned `http.Handler` is always non-nil.
 //
@@ -465,49 +463,30 @@ func (r *Router) Handler(req *http.Request) (http.Handler, *http.Request) {
 		return r.Parent.Handler(req)
 	}
 
-	if r.routeTree == nil ||
-		req.RequestURI == "" ||
-		req.RequestURI[0] != '/' {
+	if r.routeTree == nil {
 		return r.notFoundHandler(), req
 	}
 
-	path := req.RequestURI
-	for i := 1; i < len(path); i++ {
-		if path[i] == '?' {
-			path = path[:i]
-			break
-		}
-	}
-
 	var (
-		s    = path        // Search
-		si   int           // Search index
-		sl   int           // Search length
-		pl   int           // Prefix length
-		ll   int           // LCP length
-		ml   int           // Minimum length of the `sl` and `pl`
-		cn   = r.routeTree // Current node
-		sn   *routeNode    // Saved node
-		fnt  routeNodeType // From node type
-		nnt  routeNodeType // Next node type
-		ppi  int           // Path parameter index
-		ppvs []string      // Path parameter values
-		i    int           // Index
-		h    http.Handler  // Handler
+		s    = req.URL.Path // Search
+		si   int            // Search index
+		sl   int            // Search length
+		pl   int            // Prefix length
+		ll   int            // LCP length
+		ml   int            // Minimum length of the `sl` and `pl`
+		cn   = r.routeTree  // Current node
+		sn   *routeNode     // Saved node
+		fnt  routeNodeType  // From node type
+		nnt  routeNodeType  // Next node type
+		ppi  int            // Path parameter index
+		ppvs []string       // Path parameter values
+		i    int            // Index
+		h    http.Handler   // Handler
 	)
 
 	// Node search order: static > parameter > wildcard parameter.
 OuterLoop:
 	for {
-		// Skip continuous '/'.
-		if s != "" && s[0] == '/' {
-			i, sl = 1, len(s)
-			for ; i < sl && s[i] == '/'; i++ {
-			}
-
-			s = s[i-1:]
-		}
-
 		if cn.typ == staticRouteNode {
 			sl, pl = len(s), len(cn.prefix)
 			if sl < pl {
@@ -671,7 +650,7 @@ OuterLoop:
 				si -= len(ppvs[ppi])
 			}
 
-			s = path[si:]
+			s = req.URL.Path[si:]
 		}
 
 		if cn.typ < wildcardParamRouteNode {

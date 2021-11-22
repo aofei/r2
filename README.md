@@ -25,7 +25,6 @@ R2 is built for people who:
 * Based on [radix tree](https://en.wikipedia.org/wiki/Radix_tree)
 * Sub-router support
 * Path parameter support
-* Path auto-correction support
 * No [`http.Handler`](https://pkg.go.dev/net/http#Handler) variant
 * Middleware support
 * Zero third-party dependencies
