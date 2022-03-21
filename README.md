@@ -1,6 +1,6 @@
 # R2
 
-[![GitHub Actions](https://github.com/aofei/r2/workflows/Main/badge.svg)](https://github.com/aofei/r2)
+[![GitHub Actions](https://github.com/aofei/r2/workflows/Test/badge.svg)](https://github.com/aofei/r2)
 [![codecov](https://codecov.io/gh/aofei/r2/branch/master/graph/badge.svg)](https://codecov.io/gh/aofei/r2)
 [![Go Report Card](https://goreportcard.com/badge/github.com/aofei/r2)](https://goreportcard.com/report/github.com/aofei/r2)
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/aofei/r2)](https://pkg.go.dev/github.com/aofei/r2)
