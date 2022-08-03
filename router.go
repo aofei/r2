@@ -10,7 +10,7 @@ import (
 
 // Router is a registry of all registered routes for HTTP request routing.
 //
-// Make sure that all fields of the [Router] have been finalized before calling
+// Make sure that all fields of the Router have been finalized before calling
 // any of its methods.
 type Router struct {
 	// Parent is the parent [Router].
@@ -200,6 +200,7 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 			ph.ServeHTTP(rw, req)
 			d, ok := req.Context().Value(dataContextKey).(*data)
 			if ok {
+				//lint:ignore SA6002 this is harmless
 				r.pathParamValuesPool.Put(d.pathParamValues)
 			}
 		})
@@ -673,6 +674,7 @@ OuterLoop:
 
 	if cn == nil || h == nil {
 		if ppvs != nil {
+			//lint:ignore SA6002 this is harmless
 			r.pathParamValuesPool.Put(ppvs)
 		}
 
