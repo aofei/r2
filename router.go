@@ -10,46 +10,47 @@ import (
 
 // Router is a registry of all registered routes for HTTP request routing.
 //
-// Make sure that all fields of the `Router` have been finalized before calling
+// Make sure that all fields of the [Router] have been finalized before calling
 // any of its methods.
 type Router struct {
-	// Parent is the parent `Router`.
+	// Parent is the parent [Router].
 	Parent *Router
 
 	// PathPrefix is the path prefix of all routes to be registered.
 	PathPrefix string
 
-	// Middlewares is the `Middleware` chain that performs after routing.
+	// Middlewares is the [Middleware] chain that performs after routing.
 	Middlewares []Middleware
 
 	// NotFoundHandler writes not found responses. It is used when the
-	// `Handler` fails to find a matching handler for a request.
+	// [Router.Handler] fails to find a matching handler for a request.
 	//
-	// If the `NotFoundHandler` is nil, a default one is used.
+	// If the NotFoundHandler is nil, a default one is used.
 	//
-	// Note that the `NotFoundHandler` will be ignored when the `Parent` is
-	// not nil.
+	// Note that the NotFoundHandler will be ignored when the
+	// [Router.Parent] is not nil.
 	NotFoundHandler http.Handler
 
 	// MethodNotAllowedHandler writes method not allowed responses. It is
-	// used when the `Handler` finds a handler that matches only the path
-	// but not the method for a request.
+	// used when the [Router.Handler] finds a handler that matches only the
+	// path but not the method for a request.
 	//
-	// If the `MethodNotAllowedHandler` is nil, a default one is used.
+	// If the MethodNotAllowedHandler is nil, a default one is used.
 	//
-	// Note that the `MethodNotAllowedHandler` will be ignored when the
-	// `Parent` is not nil.
+	// Note that the MethodNotAllowedHandler will be ignored when the
+	// [Router.Parent] is not nil.
 	MethodNotAllowedHandler http.Handler
 
 	// TSRHandler writes TSR (Trailing Slash Redirect) responses. It may be
 	// used when the path of a registered route ends with "/*", and the
-	// `Handler` fails to find a matching handler for a request whose path
-	// does not end with such pattern.
+	// [Router.Handler] fails to find a matching handler for a request whose
+	// path has the same prefix but does not end with such pattern. See the
+	// [Router.Handle] for more details.
 	//
-	// If the `TSRHandler` is nil, a default one is used.
+	// If the TSRHandler is nil, a default one is used.
 	//
-	// Note that the `TSRHandler` will be ignored when the `Parent` is not
-	// nil.
+	// Note that the TSRHandler will be ignored when the [Router.Parent] is
+	// not nil.
 	TSRHandler http.Handler
 
 	routeTree                      *routeNode
@@ -61,8 +62,8 @@ type Router struct {
 	chainedTSRHandler              http.Handler
 }
 
-// Sub returns a new instance of the `Router` inherited from the `r` with the
-// `pathPrefix` and optional `ms`.
+// Sub returns a new instance of the [Router] inherited from the r with the
+// pathPrefix and optional ms.
 func (r *Router) Sub(pathPrefix string, ms ...Middleware) *Router {
 	return &Router{
 		Parent:      r,
@@ -71,19 +72,19 @@ func (r *Router) Sub(pathPrefix string, ms ...Middleware) *Router {
 	}
 }
 
-// Handle registers a new route for the `method` (empty string means catch-all)
-// and `path` with the matching `h` and optional `ms`.
+// Handle registers a new route for the method (empty string means catch-all)
+// and path with the matching h and optional ms.
 //
-// A ':' followed by a name in the `path` declares a path parameter that matches
-// all characters except '/'. And an '*' in the `path` declares a wildcard path
+// A ':' followed by a name in the path declares a path parameter that matches
+// all characters except '/'. And an '*' in the path declares a wildcard path
 // parameter that greedily matches all characters, with "*" as its name. The
-// `PathParam` can be used to get those declared path parameters after a request
+// [PathParam] can be used to get those declared path parameters after a request
 // is matched.
 //
-// When the `path` ends with "/*", and there is at least one path element before
+// When the path ends with "/*", and there is at least one path element before
 // it without any other path parameters, a sepcial catch-all route will be
-// automatically registered with the result of `path[:len(path)-2]` as its path
-// and the `r.TSRHandler` as its handler. This special catch-all route will be
+// automatically registered with the result of path[:len(path)-2] as its path
+// and the r.TSRHandler as its handler. This special catch-all route will be
 // overridden if a route with such path is explicitly registered, regardless of
 // its method.
 func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
@@ -294,7 +295,7 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 	r.insertRoute(method, path, h, staticRouteNode, pathParamNames)
 }
 
-// insertRoute inserts a new route into the `r.routeTree`.
+// insertRoute inserts a new route into the r.routeTree.
 func (r *Router) insertRoute(
 	method string,
 	path string,
@@ -316,7 +317,7 @@ func (r *Router) insertRoute(
 		sl int           // Search length
 		pl int           // Prefix length
 		ll int           // LCP length
-		ml int           // Minimum length of the `sl` and `pl`
+		ml int           // Minimum length of the sl and pl
 		cn = r.routeTree // Current node
 		nn *routeNode    // Next node
 	)
@@ -450,14 +451,14 @@ func (r *Router) insertRoute(
 	}
 }
 
-// Handler returns a matched `http.Handler` for the `req` along with a possible
-// revision of the `req`.
+// Handler returns a matched [http.Handler] for the req along with a possible
+// revision of the req.
 //
-// The returned `http.Handler` is always non-nil.
+// The returned [http.Handler] is always non-nil.
 //
-// The revision of the `req` only happens when the matched route has at least
-// one path parameter and the result of `req.Context()` has nothing to do with
-// the `Context`. Otherwise, the `req` itself is returned.
+// The revision of the req only happens when the matched route has at least one
+// path parameter and the result of req.Context() has nothing to do with the
+// [Context]. Otherwise, the req itself is returned.
 func (r *Router) Handler(req *http.Request) (http.Handler, *http.Request) {
 	if r.Parent != nil {
 		return r.Parent.Handler(req)
@@ -473,7 +474,7 @@ func (r *Router) Handler(req *http.Request) (http.Handler, *http.Request) {
 		sl   int            // Search length
 		pl   int            // Prefix length
 		ll   int            // LCP length
-		ml   int            // Minimum length of the `sl` and `pl`
+		ml   int            // Minimum length of the sl and pl
 		cn   = r.routeTree  // Current node
 		sn   *routeNode     // Saved node
 		fnt  routeNodeType  // From node type
@@ -701,7 +702,7 @@ OuterLoop:
 	return h, req
 }
 
-// ServeHTTP implements the `http.Handler`.
+// ServeHTTP implements the [http.Handler].
 func (r *Router) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	if r.Parent != nil {
 		r.Parent.ServeHTTP(rw, req)
@@ -712,7 +713,7 @@ func (r *Router) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	h.ServeHTTP(rw, req)
 }
 
-// notFoundHandler returns an `http.Handler` to write not found responses.
+// notFoundHandler returns an [http.Handler] to write not found responses.
 func (r *Router) notFoundHandler() http.Handler {
 	if r.chainedNotFoundHandler != nil {
 		return r.chainedNotFoundHandler
@@ -745,7 +746,7 @@ func (r *Router) notFoundHandler() http.Handler {
 	return h
 }
 
-// methodNotAllowedHandler returns an `http.Handler` to write method not allowed
+// methodNotAllowedHandler returns an [http.Handler] to write method not allowed
 // responses.
 func (r *Router) methodNotAllowedHandler() http.Handler {
 	if r.chainedMethodNotAllowedHandler != nil {
@@ -779,7 +780,7 @@ func (r *Router) methodNotAllowedHandler() http.Handler {
 	return h
 }
 
-// tsrHandler returns an `http.Handler` to write TSR (Trailing Slash Redirect)
+// tsrHandler returns an [http.Handler] to write TSR (Trailing Slash Redirect)
 // responses.
 func (r *Router) tsrHandler() http.Handler {
 	if r.chainedTSRHandler != nil {
@@ -851,7 +852,7 @@ type routeNode struct {
 	hasAtLeastOneHandler bool
 }
 
-// addChild adds the `n` as a child node to the `rn`.
+// addChild adds the n as a child node to the rn.
 func (rn *routeNode) addChild(n *routeNode) {
 	switch n.typ {
 	case staticRouteNode:
@@ -865,7 +866,7 @@ func (rn *routeNode) addChild(n *routeNode) {
 	rn.hasAtLeastOneChild = true
 }
 
-// setHandler sets the `h` to the `rn` based on the `method`.
+// setHandler sets the h to the rn based on the method.
 func (rn *routeNode) setHandler(method string, h http.Handler) {
 	switch method {
 	case "", "_tsr":
@@ -947,7 +948,7 @@ func (rn *routeNode) setHandler(method string, h http.Handler) {
 		rn.catchAllHandler != nil
 }
 
-// routeNodeType is a type of a `routeNode`.
+// routeNodeType is a type of a [routeNode].
 type routeNodeType uint8
 
 // The route node types.
@@ -957,13 +958,13 @@ const (
 	wildcardParamRouteNode
 )
 
-// methodHandler is a `http.Handler` for an HTTP method.
+// methodHandler is an [http.Handler] for an HTTP method.
 type methodHandler struct {
 	method  string
 	handler http.Handler
 }
 
-// methodHandlers is a set of `http.Handler`s for some well-known HTTP methods.
+// methodHandlers is an [http.Handler] set for some well-known HTTP methods.
 type methodHandlers struct {
 	get     http.Handler
 	head    http.Handler
