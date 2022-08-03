@@ -10,7 +10,7 @@ import (
 
 // Router is a registry of all registered routes for HTTP request routing.
 //
-// Make sure that all fields of the [Router] have been finalized before calling
+// Make sure that all fields of the Router have been finalized before calling
 // any of its methods.
 type Router struct {
 	// Parent is the parent [Router].
@@ -200,7 +200,7 @@ func (r *Router) Handle(method, path string, h http.Handler, ms ...Middleware) {
 			ph.ServeHTTP(rw, req)
 			d, ok := req.Context().Value(dataContextKey).(*data)
 			if ok {
-				r.pathParamValuesPool.Put(d.pathParamValues)
+				r.pathParamValuesPool.Put(&d.pathParamValues)
 			}
 		})
 	}
@@ -307,7 +307,8 @@ func (r *Router) insertRoute(
 		r.maxPathParams = l
 		r.pathParamValuesPool = sync.Pool{
 			New: func() interface{} {
-				return make([]string, l)
+				ppvs := make([]string, l)
+				return &ppvs
 			},
 		}
 	}
@@ -567,7 +568,7 @@ OuterLoop:
 			}
 
 			if ppvs == nil {
-				ppvs = r.pathParamValuesPool.Get().([]string)
+				ppvs = *r.pathParamValuesPool.Get().(*[]string)
 			}
 
 			ppvs[ppi] = s[:i]
@@ -585,7 +586,7 @@ OuterLoop:
 			cn = cn.wildcardParamChild
 
 			if ppvs == nil {
-				ppvs = r.pathParamValuesPool.Get().([]string)
+				ppvs = *r.pathParamValuesPool.Get().(*[]string)
 			}
 
 			ppvs[ppi] = s
@@ -673,7 +674,7 @@ OuterLoop:
 
 	if cn == nil || h == nil {
 		if ppvs != nil {
-			r.pathParamValuesPool.Put(ppvs)
+			r.pathParamValuesPool.Put(&ppvs)
 		}
 
 		if sn != nil && sn.hasAtLeastOneHandler {
